@@ -33,10 +33,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
 
       - name: Lint
         run: npx eslint src test --max-warnings 0

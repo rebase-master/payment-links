@@ -1,0 +1,162 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountType {
+  MERCHANT_BALANCE
+  PLATFORM_CLEARING
+}
+
+enum PaymentLinkStatus {
+  ACTIVE
+  PAID
+  EXPIRED
+  VOID
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum IdempotencyStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Merchant {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String   @db.VarChar(120)
+  apiKeyHash String   @unique @map("api_key_hash") @db.VarChar(64)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  accounts     Account[]
+  paymentLinks PaymentLink[]
+
+  @@map("merchants")
+}
+
+model Account {
+  id         String      @id @default(uuid()) @db.Uuid
+  merchantId String?     @map("merchant_id") @db.Uuid
+  type       AccountType
+  currency   String      @db.Char(3)
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  merchant      Merchant?     @relation(fields: [merchantId], references: [id])
+  ledgerEntries LedgerEntry[]
+
+  @@index([merchantId])
+  @@map("accounts")
+}
+
+model PaymentLink {
+  id          String            @id @default(uuid()) @db.Uuid
+  merchantId  String            @map("merchant_id") @db.Uuid
+  amount      BigInt // minor units (fils, cents)
+  currency    String            @db.Char(3)
+  status      PaymentLinkStatus @default(ACTIVE)
+  description String?           @db.VarChar(255)
+  reference   String?           @db.VarChar(80)
+  expiresAt   DateTime?         @map("expires_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  merchant Merchant  @relation(fields: [merchantId], references: [id])
+  payments Payment[]
+
+  @@index([merchantId])
+  @@index([status])
+  @@map("payment_links")
+}
+
+model Payment {
+  id                String        @id @default(uuid()) @db.Uuid
+  paymentLinkId     String        @map("payment_link_id") @db.Uuid
+  amount            BigInt
+  currency          String        @db.Char(3)
+  status            PaymentStatus @default(PENDING)
+  provider          String        @db.VarChar(40)
+  providerPaymentId String?       @map("provider_payment_id") @db.VarChar(120)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  paymentLink   PaymentLink   @relation(fields: [paymentLinkId], references: [id])
+  ledgerEntries LedgerEntry[]
+
+  @@unique([provider, providerPaymentId])
+  @@index([paymentLinkId])
+  @@map("payments")
+}
+
+model LedgerEntry {
+  id        BigInt          @id @default(autoincrement())
+  accountId String          @map("account_id") @db.Uuid
+  paymentId String?         @map("payment_id") @db.Uuid
+  direction LedgerDirection
+  amount    BigInt // always positive; direction carries the sign
+  currency  String          @db.Char(3)
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  account Account  @relation(fields: [accountId], references: [id])
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([accountId])
+  @@index([paymentId])
+  @@map("ledger_entries")
+}
+
+model IdempotencyKey {
+  id           String            @id @default(uuid()) @db.Uuid
+  scope        String            @db.VarChar(60)
+  key          String            @db.VarChar(200)
+  requestHash  String            @map("request_hash") @db.VarChar(64)
+  status       IdempotencyStatus @default(IN_PROGRESS)
+  responseBody Json?             @map("response_body")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  @@unique([scope, key])
+  @@map("idempotency_keys")
+}
+
+model ProviderEvent {
+  id              String    @id @default(uuid()) @db.Uuid
+  provider        String    @db.VarChar(40)
+  providerEventId String    @map("provider_event_id") @db.VarChar(120)
+  type            String    @db.VarChar(80)
+  payload         Json
+  signature       String?   @db.VarChar(256)
+  receivedAt      DateTime  @default(now()) @map("received_at")
+  processedAt     DateTime? @map("processed_at")
+
+  @@unique([provider, providerEventId])
+  @@map("provider_events")
+}
+
+model OutboxMessage {
+  id            String    @id @default(uuid()) @db.Uuid
+  aggregateType String    @map("aggregate_type") @db.VarChar(60)
+  aggregateId   String    @map("aggregate_id") @db.VarChar(64)
+  eventType     String    @map("event_type") @db.VarChar(80)
+  payload       Json
+  createdAt     DateTime  @default(now()) @map("created_at")
+  publishedAt   DateTime? @map("published_at")
+  attempts      Int       @default(0)
+
+  @@index([publishedAt])
+  @@map("outbox_messages")
+}
