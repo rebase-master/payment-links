@@ -1,10 +1,11 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
+import type { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
 describe('Foundation (e2e)', () => {
-  let app: INestApplication;
+  let app: INestApplication<App>;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -32,7 +33,9 @@ describe('Foundation (e2e)', () => {
       .expect('Content-Type', /text\/plain/)
       .expect((res) => {
         if (!res.text.includes('nodejs_eventloop_lag_seconds')) {
-          throw new Error('expected default process metrics in /metrics output');
+          throw new Error(
+            'expected default process metrics in /metrics output',
+          );
         }
       });
   });
