@@ -1,8 +1,19 @@
 import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  await app.listen(process.env.PORT ?? 3000);
+async function bootstrap(): Promise<void> {
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  app.useLogger(app.get(Logger));
+  app.enableShutdownHooks();
+
+  const port = app.get(ConfigService).get<number>('PORT', 3000);
+  await app.listen(port);
 }
-bootstrap();
+
+bootstrap().catch((err: unknown) => {
+  console.error(err);
+  process.exit(1);
+});
