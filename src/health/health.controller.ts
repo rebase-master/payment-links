@@ -21,7 +21,10 @@ export class HealthController {
   async ready(): Promise<{ status: 'ok'; database: 'up' }> {
     const dbUp = await this.health.pingDatabase();
     if (!dbUp) {
-      throw new ServiceUnavailableException({ status: 'error', database: 'down' });
+      throw new ServiceUnavailableException({
+        status: 'error',
+        database: 'down',
+      });
     }
     return { status: 'ok', database: 'up' };
   }

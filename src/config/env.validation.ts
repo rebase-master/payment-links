@@ -31,7 +31,9 @@ export class EnvironmentVariables {
   DATABASE_URL!: string;
 }
 
-export function validateEnv(raw: Record<string, unknown>): EnvironmentVariables {
+export function validateEnv(
+  raw: Record<string, unknown>,
+): EnvironmentVariables {
   const parsed = plainToInstance(EnvironmentVariables, raw, {
     enableImplicitConversion: true,
   });
@@ -39,7 +41,10 @@ export function validateEnv(raw: Record<string, unknown>): EnvironmentVariables 
   const errors = validateSync(parsed, { skipMissingProperties: false });
   if (errors.length > 0) {
     const details = errors
-      .map((e) => `  ${e.property}: ${Object.values(e.constraints ?? {}).join('; ')}`)
+      .map(
+        (e) =>
+          `  ${e.property}: ${Object.values(e.constraints ?? {}).join('; ')}`,
+      )
       .join('\n');
     throw new Error(`Invalid environment variables:\n${details}`);
   }

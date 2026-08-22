@@ -43,13 +43,14 @@ The code is organised by domain rather than by technical layer. Each area — me
 
 ```bash
 npm install
-docker compose up -d      # PostgreSQL and Kafka
+cp .env.example .env
+docker compose up -d      # PostgreSQL
 npm run start:dev
 ```
 
-- `npm test` and `npm run test:e2e` — unit, integration, and end-to-end tests
+- `npm test` — unit tests; `npm run test:e2e` — end-to-end tests against the app
 - `GET /health/live`, `GET /health/ready` — liveness, and readiness (which checks the database)
-- `GET /metrics` — Prometheus-format counters
+- `GET /metrics` — Prometheus-format metrics. Scrape from an internal network only; it exposes process internals and should not sit behind the public ingress.
 
 ## Deliberately out of scope
 
