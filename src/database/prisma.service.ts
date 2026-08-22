@@ -13,15 +13,29 @@ export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
-  private readonly logger = new Logger(PrismaService.name);
+  private readonly logger: Logger;
 
   constructor(config: ConfigService) {
+    const logger = new Logger(PrismaService.name);
+
     super({
-      adapter: new PrismaPg({
-        connectionString: config.getOrThrow<string>('DATABASE_URL'),
-        connectionTimeoutMillis: 5000,
-      }),
+      adapter: new PrismaPg(
+        {
+          connectionString: config.getOrThrow<string>('DATABASE_URL'),
+          connectionTimeoutMillis: 5000,
+          query_timeout: 5000,
+          statement_timeout: 5000,
+          max: 10,
+        },
+        {
+          onPoolError: (err) => {
+            logger.warn(`idle database client error: ${err.message}`);
+          },
+        },
+      ),
     });
+
+    this.logger = logger;
   }
 
   async onModuleInit(): Promise<void> {

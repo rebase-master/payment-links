@@ -40,8 +40,8 @@ model Merchant {
   id         String   @id @default(uuid()) @db.Uuid
   name       String   @db.VarChar(120)
   apiKeyHash String   @unique @map("api_key_hash") @db.VarChar(64)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   accounts     Account[]
   paymentLinks PaymentLink[]
@@ -54,12 +54,16 @@ model Account {
   merchantId String?     @map("merchant_id") @db.Uuid
   type       AccountType
   currency   String      @db.Char(3)
-  createdAt  DateTime    @default(now()) @map("created_at")
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  merchant      Merchant?     @relation(fields: [merchantId], references: [id])
+  merchant      Merchant?     @relation(fields: [merchantId], references: [id], onDelete: Restrict)
   ledgerEntries LedgerEntry[]
 
-  @@index([merchantId])
+  // Enforces one account per (merchant, type, currency). The NULL-merchant
+  // PLATFORM_CLEARING case needs a supplementary partial unique index —
+  // standard SQL treats every NULL as distinct, so this constraint alone
+  // would not stop two clearing accounts in the same currency. See migration.
+  @@unique([merchantId, type, currency])
   @@map("accounts")
 }
 
@@ -71,15 +75,15 @@ model PaymentLink {
   status      PaymentLinkStatus @default(ACTIVE)
   description String?           @db.VarChar(255)
   reference   String?           @db.VarChar(80)
-  expiresAt   DateTime?         @map("expires_at")
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
+  expiresAt   DateTime?         @map("expires_at") @db.Timestamptz(3)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   merchant Merchant  @relation(fields: [merchantId], references: [id])
   payments Payment[]
 
-  @@index([merchantId])
-  @@index([status])
+  @@index([merchantId, status])
+  @@index([status, expiresAt])
   @@map("payment_links")
 }
 
@@ -91,8 +95,8 @@ model Payment {
   status            PaymentStatus @default(PENDING)
   provider          String        @db.VarChar(40)
   providerPaymentId String?       @map("provider_payment_id") @db.VarChar(120)
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   paymentLink   PaymentLink   @relation(fields: [paymentLinkId], references: [id])
   ledgerEntries LedgerEntry[]
@@ -109,10 +113,10 @@ model LedgerEntry {
   direction LedgerDirection
   amount    BigInt // always positive; direction carries the sign
   currency  String          @db.Char(3)
-  createdAt DateTime        @default(now()) @map("created_at")
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
   account Account  @relation(fields: [accountId], references: [id])
-  payment Payment? @relation(fields: [paymentId], references: [id])
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
 
   @@index([accountId])
   @@index([paymentId])
@@ -126,8 +130,8 @@ model IdempotencyKey {
   requestHash  String            @map("request_hash") @db.VarChar(64)
   status       IdempotencyStatus @default(IN_PROGRESS)
   responseBody Json?             @map("response_body")
-  createdAt    DateTime          @default(now()) @map("created_at")
-  updatedAt    DateTime          @updatedAt @map("updated_at")
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@unique([scope, key])
   @@map("idempotency_keys")
@@ -140,8 +144,8 @@ model ProviderEvent {
   type            String    @db.VarChar(80)
   payload         Json
   signature       String?   @db.VarChar(256)
-  receivedAt      DateTime  @default(now()) @map("received_at")
-  processedAt     DateTime? @map("processed_at")
+  receivedAt      DateTime  @default(now()) @map("received_at") @db.Timestamptz(3)
+  processedAt     DateTime? @map("processed_at") @db.Timestamptz(3)
 
   @@unique([provider, providerEventId])
   @@map("provider_events")
@@ -153,10 +157,12 @@ model OutboxMessage {
   aggregateId   String    @map("aggregate_id") @db.VarChar(64)
   eventType     String    @map("event_type") @db.VarChar(80)
   payload       Json
-  createdAt     DateTime  @default(now()) @map("created_at")
-  publishedAt   DateTime? @map("published_at")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  publishedAt   DateTime? @map("published_at") @db.Timestamptz(3)
   attempts      Int       @default(0)
 
-  @@index([publishedAt])
+  // Plain (publishedAt) dropped in favour of a hand-written partial index in
+  // the migration — it matches the relay's actual query shape and stays
+  // small as published rows accumulate. See migration.
   @@map("outbox_messages")
 }

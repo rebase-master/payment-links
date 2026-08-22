@@ -5,6 +5,10 @@ import { PrismaClient } from '../src/generated/prisma/client';
 const MERCHANT_API_KEY_HASH =
   'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is not set — copy .env.example to .env first.');
+}
+
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
@@ -49,9 +53,15 @@ async function main(): Promise<void> {
   console.log(`Seeded merchant ${merchant.id} and a demo payment link.`);
 }
 
-main()
-  .catch((err: unknown) => {
-    console.error(err);
-    process.exitCode = 1;
-  })
-  .finally(() => prisma.$disconnect());
+async function run(): Promise<void> {
+  try {
+    await main();
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+run().catch((err: unknown) => {
+  console.error(err);
+  process.exitCode = 1;
+});

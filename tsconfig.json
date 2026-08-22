@@ -23,6 +23,8 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true
   },
+  // Used only by `prisma db seed` (ts-node prisma/seed.ts). Jest has its own
+  // module override in package.json#jest / test/jest-e2e.json.
   "ts-node": {
     "compilerOptions": {
       "module": "CommonJS"
