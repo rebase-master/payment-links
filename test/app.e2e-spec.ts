@@ -26,6 +26,13 @@ describe('Foundation (e2e)', () => {
       .expect({ status: 'ok' });
   });
 
+  it('GET /health/ready -> 200 when the database is reachable', () => {
+    return request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200)
+      .expect({ status: 'ok', database: 'up' });
+  });
+
   it('GET /metrics -> 200 Prometheus text with default metrics', () => {
     return request(app.getHttpServer())
       .get('/metrics')
