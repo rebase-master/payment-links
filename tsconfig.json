@@ -25,7 +25,14 @@
   },
   // Used only by `prisma db seed` (ts-node prisma/seed.ts). Jest has its own
   // module override in package.json#jest / test/jest-e2e.json.
+  //
+  // experimentalResolver remaps a NodeNext-style "./foo.js" import to the
+  // sibling "./foo.ts" at require() time. Without it, module:CommonJS still
+  // emits the .js specifier verbatim (TypeScript never rewrites it), and
+  // ts-node runs the file in memory rather than compiling to disk — so
+  // unlike `nest build`, there is no real class.js for require() to find.
   "ts-node": {
+    "experimentalResolver": true,
     "compilerOptions": {
       "module": "CommonJS"
     }

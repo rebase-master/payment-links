@@ -1,7 +1,8 @@
 generator client {
-  provider     = "prisma-client"
-  output       = "../src/generated/prisma"
-  moduleFormat = "cjs"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  moduleFormat    = "cjs"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -59,11 +60,12 @@ model Account {
   merchant      Merchant?     @relation(fields: [merchantId], references: [id], onDelete: Restrict)
   ledgerEntries LedgerEntry[]
 
-  // Enforces one account per (merchant, type, currency). The NULL-merchant
-  // PLATFORM_CLEARING case needs a supplementary partial unique index —
-  // standard SQL treats every NULL as distinct, so this constraint alone
-  // would not stop two clearing accounts in the same currency. See migration.
+  // One account per (merchant, type, currency). Standard SQL treats every
+  // NULL as distinct, so this alone would not stop two NULL-merchant
+  // PLATFORM_CLEARING accounts in the same currency — the partial unique
+  // below closes that gap for that one case specifically.
   @@unique([merchantId, type, currency])
+  @@unique([type, currency], where: { merchantId: null }, map: "accounts_platform_clearing_unique")
   @@map("accounts")
 }
 
@@ -109,6 +111,10 @@ model Payment {
 model LedgerEntry {
   id        BigInt          @id @default(autoincrement())
   accountId String          @map("account_id") @db.Uuid
+  // Also the grouping key for "debits = credits" balance checks on one
+  // posting. A generic journal/transaction_id (for postings that aren't
+  // tied to a payment, e.g. manual corrections) is deferred until that
+  // feature is actually designed — see PR #3 review, item #6.
   paymentId String?         @map("payment_id") @db.Uuid
   direction LedgerDirection
   amount    BigInt // always positive; direction carries the sign
@@ -133,6 +139,12 @@ model IdempotencyKey {
   createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  // (scope, key) is not merchant-scoped, so two merchants could collide on
+  // the same key. Deferred, along with response_status/expires_at/
+  // locked_at, until the PR that implements the idempotency-check flow —
+  // this table has no consumer yet, and those columns are easier to get
+  // right once real code is reading and writing them. See PR #3 review,
+  // item #8.
   @@unique([scope, key])
   @@map("idempotency_keys")
 }
@@ -161,8 +173,9 @@ model OutboxMessage {
   publishedAt   DateTime? @map("published_at") @db.Timestamptz(3)
   attempts      Int       @default(0)
 
-  // Plain (publishedAt) dropped in favour of a hand-written partial index in
-  // the migration — it matches the relay's actual query shape and stays
-  // small as published rows accumulate. See migration.
+  // Matches the relay's actual query (WHERE published_at IS NULL ORDER BY
+  // created_at) and stays small as published rows accumulate, unlike a
+  // plain index on the whole column.
+  @@index([createdAt], where: { publishedAt: null }, map: "outbox_messages_pending_idx")
   @@map("outbox_messages")
 }

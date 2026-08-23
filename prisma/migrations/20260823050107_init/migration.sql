@@ -18,8 +18,8 @@ CREATE TABLE "merchants" (
     "id" UUID NOT NULL,
     "name" VARCHAR(120) NOT NULL,
     "api_key_hash" VARCHAR(64) NOT NULL,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "merchants_pkey" PRIMARY KEY ("id")
 );
@@ -30,7 +30,7 @@ CREATE TABLE "accounts" (
     "merchant_id" UUID,
     "type" "AccountType" NOT NULL,
     "currency" CHAR(3) NOT NULL,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "accounts_pkey" PRIMARY KEY ("id")
 );
@@ -44,9 +44,9 @@ CREATE TABLE "payment_links" (
     "status" "PaymentLinkStatus" NOT NULL DEFAULT 'ACTIVE',
     "description" VARCHAR(255),
     "reference" VARCHAR(80),
-    "expires_at" TIMESTAMP(3),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
+    "expires_at" TIMESTAMPTZ(3),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "payment_links_pkey" PRIMARY KEY ("id")
 );
@@ -60,8 +60,8 @@ CREATE TABLE "payments" (
     "status" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
     "provider" VARCHAR(40) NOT NULL,
     "provider_payment_id" VARCHAR(120),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "payments_pkey" PRIMARY KEY ("id")
 );
@@ -74,7 +74,7 @@ CREATE TABLE "ledger_entries" (
     "direction" "LedgerDirection" NOT NULL,
     "amount" BIGINT NOT NULL,
     "currency" CHAR(3) NOT NULL,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ledger_entries_pkey" PRIMARY KEY ("id")
 );
@@ -87,8 +87,8 @@ CREATE TABLE "idempotency_keys" (
     "request_hash" VARCHAR(64) NOT NULL,
     "status" "IdempotencyStatus" NOT NULL DEFAULT 'IN_PROGRESS',
     "response_body" JSONB,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "idempotency_keys_pkey" PRIMARY KEY ("id")
 );
@@ -101,8 +101,8 @@ CREATE TABLE "provider_events" (
     "type" VARCHAR(80) NOT NULL,
     "payload" JSONB NOT NULL,
     "signature" VARCHAR(256),
-    "received_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "processed_at" TIMESTAMP(3),
+    "received_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "processed_at" TIMESTAMPTZ(3),
 
     CONSTRAINT "provider_events_pkey" PRIMARY KEY ("id")
 );
@@ -114,8 +114,8 @@ CREATE TABLE "outbox_messages" (
     "aggregate_id" VARCHAR(64) NOT NULL,
     "event_type" VARCHAR(80) NOT NULL,
     "payload" JSONB NOT NULL,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "published_at" TIMESTAMP(3),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "published_at" TIMESTAMPTZ(3),
     "attempts" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "outbox_messages_pkey" PRIMARY KEY ("id")
@@ -125,13 +125,16 @@ CREATE TABLE "outbox_messages" (
 CREATE UNIQUE INDEX "merchants_api_key_hash_key" ON "merchants"("api_key_hash");
 
 -- CreateIndex
-CREATE INDEX "accounts_merchant_id_idx" ON "accounts"("merchant_id");
+CREATE UNIQUE INDEX "accounts_merchant_id_type_currency_key" ON "accounts"("merchant_id", "type", "currency");
 
 -- CreateIndex
-CREATE INDEX "payment_links_merchant_id_idx" ON "payment_links"("merchant_id");
+CREATE UNIQUE INDEX "accounts_platform_clearing_unique" ON "accounts"("type", "currency") WHERE ("merchant_id" IS NULL);
 
 -- CreateIndex
-CREATE INDEX "payment_links_status_idx" ON "payment_links"("status");
+CREATE INDEX "payment_links_merchant_id_status_idx" ON "payment_links"("merchant_id", "status");
+
+-- CreateIndex
+CREATE INDEX "payment_links_status_expires_at_idx" ON "payment_links"("status", "expires_at");
 
 -- CreateIndex
 CREATE INDEX "payments_payment_link_id_idx" ON "payments"("payment_link_id");
@@ -152,10 +155,10 @@ CREATE UNIQUE INDEX "idempotency_keys_scope_key_key" ON "idempotency_keys"("scop
 CREATE UNIQUE INDEX "provider_events_provider_provider_event_id_key" ON "provider_events"("provider", "provider_event_id");
 
 -- CreateIndex
-CREATE INDEX "outbox_messages_published_at_idx" ON "outbox_messages"("published_at");
+CREATE INDEX "outbox_messages_pending_idx" ON "outbox_messages"("created_at") WHERE ("published_at" IS NULL);
 
 -- AddForeignKey
-ALTER TABLE "accounts" ADD CONSTRAINT "accounts_merchant_id_fkey" FOREIGN KEY ("merchant_id") REFERENCES "merchants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "accounts" ADD CONSTRAINT "accounts_merchant_id_fkey" FOREIGN KEY ("merchant_id") REFERENCES "merchants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "payment_links" ADD CONSTRAINT "payment_links_merchant_id_fkey" FOREIGN KEY ("merchant_id") REFERENCES "merchants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -167,4 +170,38 @@ ALTER TABLE "payments" ADD CONSTRAINT "payments_payment_link_id_fkey" FOREIGN KE
 ALTER TABLE "ledger_entries" ADD CONSTRAINT "ledger_entries_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "accounts"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ledger_entries" ADD CONSTRAINT "ledger_entries_payment_id_fkey" FOREIGN KEY ("payment_id") REFERENCES "payments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "ledger_entries" ADD CONSTRAINT "ledger_entries_payment_id_fkey" FOREIGN KEY ("payment_id") REFERENCES "payments"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- Hand-written: money and format invariants Prisma's schema language cannot
+-- express (CHECK constraints). Prisma does not manage these and will not
+-- flag or revert them as drift.
+ALTER TABLE "payment_links" ADD CONSTRAINT "payment_links_amount_positive" CHECK ("amount" > 0);
+ALTER TABLE "payments" ADD CONSTRAINT "payments_amount_positive" CHECK ("amount" > 0);
+ALTER TABLE "ledger_entries" ADD CONSTRAINT "ledger_entries_amount_positive" CHECK ("amount" > 0);
+
+ALTER TABLE "accounts" ADD CONSTRAINT "accounts_currency_format" CHECK ("currency" ~ '^[A-Z]{3}$');
+ALTER TABLE "payment_links" ADD CONSTRAINT "payment_links_currency_format" CHECK ("currency" ~ '^[A-Z]{3}$');
+ALTER TABLE "payments" ADD CONSTRAINT "payments_currency_format" CHECK ("currency" ~ '^[A-Z]{3}$');
+ALTER TABLE "ledger_entries" ADD CONSTRAINT "ledger_entries_currency_format" CHECK ("currency" ~ '^[A-Z]{3}$');
+
+-- Hand-written: ledger_entries is append-only. The application never issues
+-- UPDATE/DELETE/TRUNCATE against it, but a buggy future call site should not
+-- be able to silently rewrite history — the database refuses it outright.
+CREATE OR REPLACE FUNCTION ledger_entries_append_only()
+RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'ledger_entries is append-only: % is not permitted', TG_OP;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER ledger_entries_no_update
+  BEFORE UPDATE ON "ledger_entries"
+  FOR EACH ROW EXECUTE FUNCTION ledger_entries_append_only();
+
+CREATE TRIGGER ledger_entries_no_delete
+  BEFORE DELETE ON "ledger_entries"
+  FOR EACH ROW EXECUTE FUNCTION ledger_entries_append_only();
+
+CREATE TRIGGER ledger_entries_no_truncate
+  BEFORE TRUNCATE ON "ledger_entries"
+  FOR EACH STATEMENT EXECUTE FUNCTION ledger_entries_append_only();

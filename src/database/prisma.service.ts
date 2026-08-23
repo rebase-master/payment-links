@@ -23,6 +23,10 @@ export class PrismaService
         {
           connectionString: config.getOrThrow<string>('DATABASE_URL'),
           connectionTimeoutMillis: 5000,
+          // Global for the whole pool — fine for request-path queries.
+          // A future reporting/batch job that needs longer should get its
+          // own client or a per-query `SET LOCAL statement_timeout`, not a
+          // change here.
           query_timeout: 5000,
           statement_timeout: 5000,
           max: 10,

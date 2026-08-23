@@ -46,7 +46,8 @@ npm install
 cp .env.example .env
 docker compose up -d      # PostgreSQL
 npm run db:generate       # generate the Prisma client
-npm run db:migrate        # apply migrations and seed the database
+npm run db:migrate        # apply migrations (seeding is a separate, explicit step in Prisma 7)
+npm run db:seed           # seed the database
 npm run start:dev
 ```
 
