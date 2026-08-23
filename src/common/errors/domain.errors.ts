@@ -26,11 +26,11 @@ export class PaymentLinkNotPayableError extends DomainError {
   }
 }
 
-export class CurrencyMismatchError extends DomainError {
-  readonly code = 'CURRENCY_MISMATCH';
+export class PlatformAccountNotConfiguredError extends DomainError {
+  readonly code = 'PLATFORM_ACCOUNT_NOT_CONFIGURED';
 
-  constructor(expected: string, received: string) {
-    super(`Currency mismatch: expected ${expected}, received ${received}`);
+  constructor(currency: string) {
+    super(`No platform clearing account is configured for ${currency}`);
   }
 }
 
