@@ -1,9 +1,16 @@
 import 'dotenv/config';
+import { createHash } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client';
 
-const MERCHANT_API_KEY_HASH =
-  'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+// Local dev credential only — resolves to the seeded demo merchant. The auth
+// guard hashes an incoming key exactly the same way; see
+// src/auth/api-key.service.ts.
+const DEV_API_KEY = 'pl_test_acme_dev_key';
+const API_KEY_PEPPER = process.env.API_KEY_PEPPER ?? '';
+const MERCHANT_API_KEY_HASH = createHash('sha256')
+  .update(`${DEV_API_KEY}${API_KEY_PEPPER}`)
+  .digest('hex');
 
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is not set — copy .env.example to .env first.');
@@ -51,6 +58,7 @@ async function main(): Promise<void> {
   }
 
   console.log(`Seeded merchant ${merchant.id} and a demo payment link.`);
+  console.log(`Merchant API key (dev only): ${DEV_API_KEY}`);
 }
 
 async function run(): Promise<void> {

@@ -2,6 +2,7 @@ import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsOptional,
   IsString,
   Matches,
   Max,
@@ -29,6 +30,10 @@ export class EnvironmentVariables {
     message: 'DATABASE_URL must be a postgres:// connection string',
   })
   DATABASE_URL!: string;
+
+  @IsOptional()
+  @IsString()
+  API_KEY_PEPPER?: string;
 }
 
 export function validateEnv(
