@@ -44,6 +44,9 @@ jobs:
       - name: Apply migrations
         run: npx prisma migrate deploy
 
+      - name: Drift gate (schema vs applied migrations)
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
       - name: Lint
         run: npx eslint src test --max-warnings 0
 
