@@ -33,10 +33,19 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Drift gate (schema vs applied migrations)
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
 
       - name: Lint
         run: npx eslint src test --max-warnings 0

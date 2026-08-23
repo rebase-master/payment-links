@@ -45,10 +45,14 @@ The code is organised by domain rather than by technical layer. Each area — me
 npm install
 cp .env.example .env
 docker compose up -d      # PostgreSQL
+npm run db:generate       # generate the Prisma client
+npm run db:migrate        # apply migrations (seeding is a separate, explicit step in Prisma 7)
+npm run db:seed           # seed the database
 npm run start:dev
 ```
 
-- `npm test` — unit tests; `npm run test:e2e` — end-to-end tests against the app
+- `npm test` — unit tests, no database required
+- `npm run test:e2e` — end-to-end tests against the app; requires Postgres running (`docker compose up -d`) and migrated (`npm run db:migrate`)
 - `GET /health/live`, `GET /health/ready` — liveness, and readiness (which checks the database)
 - `GET /metrics` — Prometheus-format metrics. Scrape from an internal network only; it exposes process internals and should not sit behind the public ingress.
 
