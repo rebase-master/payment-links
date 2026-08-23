@@ -10,7 +10,19 @@ import type { Merchant, PaymentLink, Prisma } from '../generated/prisma/client';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { OutboxService } from '../outbox/outbox.service';
 
+// Stand-in payment provider: payLink settles synchronously here with no real
+// money movement, and as a public mutation it has no rate limiting yet. The
+// webhook phase replaces this with a signature-verified provider callback.
 const PROVIDER = 'mock_psp';
+
+// Concurrent same-key requests block on the idempotency INSERT until the first
+// commits; allow room beyond Prisma's 5s default so contention surfaces as a
+// wait rather than a "Transaction already closed".
+const TX_OPTIONS = {
+  isolationLevel: 'ReadCommitted',
+  timeout: 15_000,
+  maxWait: 10_000,
+} as const;
 
 export interface CreatePaymentLinkInput {
   amount: bigint;
@@ -18,6 +30,7 @@ export interface CreatePaymentLinkInput {
   description?: string | null;
   reference?: string | null;
   expiresAt?: Date | null;
+  idempotencyKey: string;
 }
 
 export interface PayLinkInput {
@@ -52,22 +65,50 @@ export class PaymentsService {
     private readonly outbox: OutboxService,
   ) {}
 
-  async createPaymentLink(
+  createPaymentLink(
     merchant: Merchant,
     input: CreatePaymentLinkInput,
   ): Promise<PaymentLinkResult> {
-    // merchantId comes from the authenticated merchant, never the input.
-    const link = await this.prisma.paymentLink.create({
-      data: {
-        merchantId: merchant.id,
-        amount: input.amount,
-        currency: input.currency,
-        description: input.description ?? null,
-        reference: input.reference ?? null,
-        expiresAt: input.expiresAt ?? null,
-      },
-    });
-    return toPaymentLinkResult(link);
+    const requestHash = createHash('sha256')
+      .update(
+        JSON.stringify({
+          amount: input.amount.toString(),
+          currency: input.currency,
+          description: input.description ?? null,
+          reference: input.reference ?? null,
+          expiresAt: input.expiresAt ? input.expiresAt.toISOString() : null,
+        }),
+      )
+      .digest('hex');
+
+    // Key namespaced by merchant so two merchants cannot collide on a shared
+    // value; a retry with the same key + input replays the same link.
+    return this.prisma.$transaction(
+      (tx) =>
+        this.idempotency.execute<PaymentLinkResult>(
+          tx,
+          {
+            scope: 'createPaymentLink',
+            key: `${merchant.id}:${input.idempotencyKey}`,
+            requestHash,
+          },
+          async () => {
+            // merchantId comes from the authenticated merchant, never input.
+            const link = await tx.paymentLink.create({
+              data: {
+                merchantId: merchant.id,
+                amount: input.amount,
+                currency: input.currency,
+                description: input.description ?? null,
+                reference: input.reference ?? null,
+                expiresAt: input.expiresAt ?? null,
+              },
+            });
+            return toPaymentLinkResult(link);
+          },
+        ),
+      TX_OPTIONS,
+    );
   }
 
   async getPaymentLink(id: string): Promise<PaymentLinkResult | null> {
@@ -80,12 +121,20 @@ export class PaymentsService {
       .update(input.paymentLinkId)
       .digest('hex');
 
-    return this.prisma.$transaction((tx) =>
-      this.idempotency.execute<PaymentResult>(
-        tx,
-        { scope: 'payLink', key: input.idempotencyKey, requestHash },
-        () => this.settle(tx, input.paymentLinkId),
-      ),
+    // Key namespaced by link id: reusing a key on a different link is a
+    // different claim, so a shared value cannot be "burned" across links.
+    return this.prisma.$transaction(
+      (tx) =>
+        this.idempotency.execute<PaymentResult>(
+          tx,
+          {
+            scope: 'payLink',
+            key: `${input.paymentLinkId}:${input.idempotencyKey}`,
+            requestHash,
+          },
+          () => this.settle(tx, input.paymentLinkId),
+        ),
+      TX_OPTIONS,
     );
   }
 

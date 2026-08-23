@@ -1,11 +1,12 @@
 import { Field, InputType } from '@nestjs/graphql';
 import {
-  IsISO8601,
   IsOptional,
   Matches,
   MaxLength,
+  MinLength,
   Validate,
 } from 'class-validator';
+import { IsFutureDateStringConstraint } from '../../common/validation/is-future-date-string.validator';
 import { IsInt64StringConstraint } from '../../common/validation/is-int64-string.validator';
 
 @InputType()
@@ -32,6 +33,14 @@ export class CreatePaymentLinkInput {
 
   @Field(() => String, { nullable: true })
   @IsOptional()
-  @IsISO8601()
+  @Validate(IsFutureDateStringConstraint)
   expiresAt?: string;
+
+  @Field({
+    description:
+      'Client-generated key; retries with the same key are de-duplicated.',
+  })
+  @MinLength(1)
+  @MaxLength(200)
+  idempotencyKey!: string;
 }

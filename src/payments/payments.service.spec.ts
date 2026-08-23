@@ -9,7 +9,11 @@ import type { IdempotencyService } from '../idempotency/idempotency.service';
 import { PaymentsService } from './payments.service';
 
 interface TxMock {
-  paymentLink: { findUnique: jest.Mock; updateMany: jest.Mock };
+  paymentLink: {
+    findUnique: jest.Mock;
+    updateMany: jest.Mock;
+    create: jest.Mock;
+  };
   payment: { create: jest.Mock };
   account: { upsert: jest.Mock; findFirst: jest.Mock };
   ledgerEntry: { createMany: jest.Mock };
@@ -20,6 +24,16 @@ function makeTx(): TxMock {
     paymentLink: {
       findUnique: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      create: jest.fn().mockResolvedValue({
+        id: 'link-new',
+        amount: 5000n,
+        currency: 'AED',
+        status: 'ACTIVE',
+        description: null,
+        reference: null,
+        expiresAt: null,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
     },
     payment: {
       create: jest.fn().mockResolvedValue({ id: 'pay-1', status: 'SUCCEEDED' }),
@@ -35,28 +49,18 @@ function makeTx(): TxMock {
 function makeService(tx: TxMock): {
   service: PaymentsService;
   outbox: { write: jest.Mock };
-  createLink: jest.Mock;
 } {
-  const createLink = jest.fn().mockResolvedValue({
-    id: 'link-new',
-    amount: 5000n,
-    currency: 'AED',
-    status: 'ACTIVE',
-    description: null,
-    reference: null,
-    expiresAt: null,
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-  });
+  // $transaction runs the callback with the mock tx; idempotency.execute just
+  // runs the work (its own state machine is unit-tested separately).
   const prisma = {
     $transaction: (cb: (t: unknown) => unknown) => cb(tx),
-    paymentLink: { create: createLink },
   } as unknown as PrismaService;
   const idempotency = {
     execute: (_tx: unknown, _params: unknown, work: () => unknown) => work(),
   } as unknown as IdempotencyService;
   const outbox = { write: jest.fn().mockResolvedValue(undefined) };
   const service = new PaymentsService(prisma, idempotency, outbox);
-  return { service, outbox, createLink };
+  return { service, outbox };
 }
 
 const ACTIVE_LINK = {
@@ -163,15 +167,16 @@ describe('PaymentsService.payLink', () => {
 describe('PaymentsService.createPaymentLink', () => {
   it('creates the link for the authenticated merchant, not a client-supplied id', async () => {
     const tx = makeTx();
-    const { service, createLink } = makeService(tx);
+    const { service } = makeService(tx);
     const merchant = { id: 'merchant-1' } as unknown as Merchant;
 
     await service.createPaymentLink(merchant, {
       amount: 5000n,
       currency: 'AED',
+      idempotencyKey: 'create-1',
     });
 
-    expect(createLink).toHaveBeenCalledWith({
+    expect(tx.paymentLink.create).toHaveBeenCalledWith({
       data: {
         merchantId: 'merchant-1',
         amount: 5000n,

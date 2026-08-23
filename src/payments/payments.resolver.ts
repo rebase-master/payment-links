@@ -36,6 +36,7 @@ export class PaymentsResolver {
       description: input.description ?? null,
       reference: input.reference ?? null,
       expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+      idempotencyKey: input.idempotencyKey,
     });
   }
 

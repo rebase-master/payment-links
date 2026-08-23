@@ -139,12 +139,11 @@ model IdempotencyKey {
   createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  // (scope, key) is not merchant-scoped, so two merchants could collide on
-  // the same key. Deferred, along with response_status/expires_at/
-  // locked_at, until the PR that implements the idempotency-check flow —
-  // this table has no consumer yet, and those columns are easier to get
-  // right once real code is reading and writing them. See PR #3 review,
-  // item #8.
+  // Uniqueness is namespaced by the caller at the application layer: the key
+  // folds in the payment link id (payLink) or the merchant id
+  // (createPaymentLink), so callers cannot collide on a shared value. A
+  // dedicated merchant_id column plus response_status / expires_at / locked_at
+  // are deferred to the idempotency-hardening pass.
   @@unique([scope, key])
   @@map("idempotency_keys")
 }
