@@ -109,7 +109,7 @@ describe('PaymentsService.payLink', () => {
 
     expect(outbox.write).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
-      paymentId: 'pay-1',
+      id: 'pay-1',
       paymentLinkId: 'link-1',
       status: 'SUCCEEDED',
       amount: '2500',

@@ -26,7 +26,7 @@ const CREATE = `
 `;
 const PAY = `
   mutation Pay($input: PayLinkInput!) {
-    payLink(input: $input) { paymentId status amount currency }
+    payLink(input: $input) { id status amount currency }
   }
 `;
 
@@ -80,17 +80,17 @@ describe('Money path (e2e)', () => {
 
     const payKey = randomUUID();
     const paid = await gql<{
-      payLink: { paymentId: string; status: string; amount: string };
+      payLink: { id: string; status: string; amount: string };
     }>(PAY, { input: { paymentLinkId: link?.id, idempotencyKey: payKey } });
 
     expect(paid.data?.payLink.status).toBe('SUCCEEDED');
     expect(paid.data?.payLink.amount).toBe('2500');
 
     // Same idempotency key replays the same payment rather than paying twice.
-    const replay = await gql<{ payLink: { paymentId: string } }>(PAY, {
+    const replay = await gql<{ payLink: { id: string } }>(PAY, {
       input: { paymentLinkId: link?.id, idempotencyKey: payKey },
     });
-    expect(replay.data?.payLink.paymentId).toBe(paid.data?.payLink.paymentId);
+    expect(replay.data?.payLink.id).toBe(paid.data?.payLink.id);
   });
 
   it('rejects createPaymentLink without an API key', async () => {

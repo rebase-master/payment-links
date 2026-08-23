@@ -64,5 +64,8 @@ link).
 - Native Postgres `CHECK` constraints, the append-only trigger, and partial
   unique indexes are enforced by the database, so the invariants survive a buggy
   or entirely different client.
+- `payLink` settles synchronously against a **mock provider** — no real money
+  moves, and as a public mutation it is currently unthrottled. A real
+  `PaymentProvider` port and rate limiting arrive with the webhook phase.
 - Deferred to their own phases: the outbox → Kafka relay, provider-webhook
   ingestion (HMAC + dedupe), and a generic journal table for adjustments.

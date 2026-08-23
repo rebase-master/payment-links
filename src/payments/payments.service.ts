@@ -50,7 +50,7 @@ export type PaymentLinkResult = {
 };
 
 export type PaymentResult = {
-  paymentId: string;
+  id: string;
   paymentLinkId: string;
   status: string;
   amount: string;
@@ -247,7 +247,7 @@ export class PaymentsService {
     });
 
     return {
-      paymentId: payment.id,
+      id: payment.id,
       paymentLinkId,
       status: payment.status,
       amount: link.amount.toString(),

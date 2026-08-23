@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import {
   IdempotencyInProgressError,
   IdempotencyKeyConflictError,
@@ -41,6 +42,11 @@ describe('IdempotencyService', () => {
 
   beforeEach(() => {
     service = new IdempotencyService();
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('runs the work once and stores its response on first use', async () => {

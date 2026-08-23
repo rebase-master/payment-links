@@ -1,4 +1,5 @@
 import { Field, ID, ObjectType } from '@nestjs/graphql';
+import { PaymentLinkStatus } from './enums';
 
 @ObjectType('PaymentLink')
 export class PaymentLinkType {
@@ -11,8 +12,8 @@ export class PaymentLinkType {
   @Field()
   currency!: string;
 
-  @Field()
-  status!: string;
+  @Field(() => PaymentLinkStatus)
+  status!: PaymentLinkStatus;
 
   @Field(() => String, { nullable: true })
   description!: string | null;
