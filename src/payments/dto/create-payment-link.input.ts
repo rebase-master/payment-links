@@ -1,12 +1,19 @@
 import { Field, InputType } from '@nestjs/graphql';
-import { IsISO8601, IsOptional, Matches, MaxLength } from 'class-validator';
+import {
+  IsISO8601,
+  IsOptional,
+  Matches,
+  MaxLength,
+  Validate,
+} from 'class-validator';
+import { IsInt64StringConstraint } from '../../common/validation/is-int64-string.validator';
 
 @InputType()
 export class CreatePaymentLinkInput {
   @Field({
     description: 'Amount in minor units, as a positive integer string.',
   })
-  @Matches(/^[1-9]\d*$/, { message: 'amount must be a positive integer' })
+  @Validate(IsInt64StringConstraint)
   amount!: string;
 
   @Field()

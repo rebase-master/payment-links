@@ -5,6 +5,7 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { LoggerModule } from 'nestjs-pino';
 import { validateEnv } from './config/env.validation';
 import { loggerConfig } from './logging/logger.config';
+import { maskError } from './common/graphql/mask-error';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
@@ -20,6 +21,7 @@ import { PaymentsModule } from './payments/payments.module';
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: true,
+      formatError: maskError,
     }),
     DatabaseModule,
     HealthModule,
