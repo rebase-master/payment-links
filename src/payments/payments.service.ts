@@ -70,6 +70,11 @@ export class PaymentsService {
     return toPaymentLinkResult(link);
   }
 
+  async getPaymentLink(id: string): Promise<PaymentLinkResult | null> {
+    const link = await this.prisma.paymentLink.findUnique({ where: { id } });
+    return link ? toPaymentLinkResult(link) : null;
+  }
+
   payLink(input: PayLinkInput): Promise<PaymentResult> {
     const requestHash = createHash('sha256')
       .update(input.paymentLinkId)

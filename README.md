@@ -52,7 +52,8 @@ npm run start:dev
 ```
 
 - `npm test` — unit tests, no database required
-- `npm run test:e2e` — end-to-end tests against the app; requires Postgres running (`docker compose up -d`) and migrated (`npm run db:migrate`)
+- `npm run test:e2e` — end-to-end tests against the app; requires Postgres running, migrated, and seeded (`npm run db:seed`)
+- `POST /graphql` — the GraphQL API. `createPaymentLink` requires `Authorization: Bearer <api key>` (the seeded dev merchant's key is `pl_test_acme_dev_key`); `paymentLink` and `payLink` are public.
 - `GET /health/live`, `GET /health/ready` — liveness, and readiness (which checks the database)
 - `GET /metrics` — Prometheus-format metrics. Scrape from an internal network only; it exposes process internals and should not sit behind the public ingress.
 
