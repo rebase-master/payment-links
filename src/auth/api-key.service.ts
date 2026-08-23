@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
@@ -15,12 +15,12 @@ export class ApiKeyService {
     this.pepper = config.get<string>('API_KEY_PEPPER') ?? '';
   }
 
-  // API keys are 256-bit random tokens, so a fast SHA-256 lookup is the right
-  // tool — bcrypt/argon2 exist to slow down guessing of low-entropy passwords,
-  // which does not apply here. The pepper adds defence-in-depth against a bare
-  // DB read.
+  // HMAC-SHA256 keyed by the pepper — the standard keyed-hash construction. A
+  // fast hash (not bcrypt) is correct here because API keys are 256-bit random
+  // tokens, not low-entropy passwords; the pepper is defence-in-depth against a
+  // bare DB read.
   hash(apiKey: string): string {
-    return createHash('sha256').update(`${apiKey}${this.pepper}`).digest('hex');
+    return createHmac('sha256', this.pepper).update(apiKey).digest('hex');
   }
 
   resolveMerchant(apiKey: string): Promise<Merchant | null> {

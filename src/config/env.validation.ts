@@ -2,11 +2,12 @@ import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
-  IsOptional,
   IsString,
   Matches,
   Max,
   Min,
+  MinLength,
+  ValidateIf,
   validateSync,
 } from 'class-validator';
 
@@ -31,8 +32,12 @@ export class EnvironmentVariables {
   })
   DATABASE_URL!: string;
 
-  @IsOptional()
+  // Required (and non-trivial) in production; optional in dev/test.
+  @ValidateIf(
+    (env: EnvironmentVariables) => env.NODE_ENV === NodeEnv.Production,
+  )
   @IsString()
+  @MinLength(16)
   API_KEY_PEPPER?: string;
 }
 

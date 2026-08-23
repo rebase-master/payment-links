@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import type { ConfigService } from '@nestjs/config';
 import type { PrismaService } from '../database/prisma.service';
 import { ApiKeyService } from './api-key.service';
@@ -14,10 +14,10 @@ function serviceWith(findUnique: jest.Mock): ApiKeyService {
 }
 
 describe('ApiKeyService', () => {
-  it('hashes key + pepper as 64-char hex sha256', () => {
+  it('hashes the key with HMAC-SHA256 keyed by the pepper (64-char hex)', () => {
     const service = serviceWith(jest.fn());
-    const expected = createHash('sha256')
-      .update(`secret-key${PEPPER}`)
+    const expected = createHmac('sha256', PEPPER)
+      .update('secret-key')
       .digest('hex');
 
     const hash = service.hash('secret-key');

@@ -1,9 +1,10 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
-import { DomainExceptionFilter } from './../src/common/filters/domain-exception.filter';
+import { configureApp } from './../src/configure-app';
 
 // Resolves to the seeded demo merchant (see prisma/seed.ts). Run
 // `npm run db:seed` against the test database first.
@@ -37,10 +38,7 @@ describe('Money path (e2e)', () => {
       imports: [AppModule],
     }).compile();
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ transform: true, whitelist: true }),
-    );
-    app.useGlobalFilters(new DomainExceptionFilter());
+    configureApp(app);
     await app.init();
   });
 
@@ -64,30 +62,40 @@ describe('Money path (e2e)', () => {
   it('creates a link (authenticated) and pays it, idempotently', async () => {
     const created = await gql<{
       createPaymentLink: { id: string; amount: string; status: string };
-    }>(CREATE, { input: { amount: '2500', currency: 'AED' } }, DEV_API_KEY);
+    }>(
+      CREATE,
+      {
+        input: {
+          amount: '2500',
+          currency: 'AED',
+          idempotencyKey: randomUUID(),
+        },
+      },
+      DEV_API_KEY,
+    );
 
     const link = created.data?.createPaymentLink;
     expect(link?.status).toBe('ACTIVE');
     expect(link?.amount).toBe('2500');
 
-    const key = `e2e-${link?.id ?? ''}`;
+    const payKey = randomUUID();
     const paid = await gql<{
       payLink: { paymentId: string; status: string; amount: string };
-    }>(PAY, { input: { paymentLinkId: link?.id, idempotencyKey: key } });
+    }>(PAY, { input: { paymentLinkId: link?.id, idempotencyKey: payKey } });
 
     expect(paid.data?.payLink.status).toBe('SUCCEEDED');
     expect(paid.data?.payLink.amount).toBe('2500');
 
     // Same idempotency key replays the same payment rather than paying twice.
     const replay = await gql<{ payLink: { paymentId: string } }>(PAY, {
-      input: { paymentLinkId: link?.id, idempotencyKey: key },
+      input: { paymentLinkId: link?.id, idempotencyKey: payKey },
     });
     expect(replay.data?.payLink.paymentId).toBe(paid.data?.payLink.paymentId);
   });
 
   it('rejects createPaymentLink without an API key', async () => {
     const res = await gql<{ createPaymentLink: unknown }>(CREATE, {
-      input: { amount: '100', currency: 'AED' },
+      input: { amount: '100', currency: 'AED', idempotencyKey: randomUUID() },
     });
 
     expect(res.errors).toBeDefined();

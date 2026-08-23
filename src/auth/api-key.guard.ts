@@ -52,5 +52,6 @@ function bearerToken(request: AuthenticatedRequest): string | null {
     return null;
   }
   const [scheme, token] = header.split(' ');
-  return scheme === 'Bearer' && token ? token : null;
+  // Auth schemes are case-insensitive per RFC 7235.
+  return scheme?.toLowerCase() === 'bearer' && token ? token : null;
 }

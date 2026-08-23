@@ -1,15 +1,19 @@
 import 'dotenv/config';
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client';
+
+if (process.env.NODE_ENV === 'production') {
+  throw new Error('Refusing to seed a production database.');
+}
 
 // Local dev credential only — resolves to the seeded demo merchant. The auth
 // guard hashes an incoming key exactly the same way; see
 // src/auth/api-key.service.ts.
 const DEV_API_KEY = 'pl_test_acme_dev_key';
 const API_KEY_PEPPER = process.env.API_KEY_PEPPER ?? '';
-const MERCHANT_API_KEY_HASH = createHash('sha256')
-  .update(`${DEV_API_KEY}${API_KEY_PEPPER}`)
+const MERCHANT_API_KEY_HASH = createHmac('sha256', API_KEY_PEPPER)
+  .update(DEV_API_KEY)
   .digest('hex');
 
 if (!process.env.DATABASE_URL) {
