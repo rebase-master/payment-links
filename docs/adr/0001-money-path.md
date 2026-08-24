@@ -61,9 +61,13 @@ link).
 - A *failed* payment (e.g. a link that is no longer active) rolls back its
   idempotency claim, so a retry re-checks rather than replaying a failure. Only
   successful effects are cached.
-- Native Postgres `CHECK` constraints, the append-only trigger, and partial
-  unique indexes are enforced by the database, so the invariants survive a buggy
-  or entirely different client.
+- The database enforces the invariants it can — `amount > 0` and currency-format
+  CHECKs, the append-only trigger, uniqueness / partial-unique indexes, FK
+  RESTRICTs — so those survive a buggy or entirely different client. The one it
+  does **not** yet enforce is balanced double-entry (debits == credits per
+  payment): today that holds by construction in the service (the two entries are
+  written together), not by a DB constraint. A per-posting balance check — a
+  trigger, or a journal table with a deferred constraint — is deferred.
 - `payLink` settles synchronously against a **mock provider** — no real money
   moves, and as a public mutation it is currently unthrottled. A real
   `PaymentProvider` port and rate limiting arrive with the webhook phase.
