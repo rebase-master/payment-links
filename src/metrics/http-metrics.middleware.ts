@@ -8,6 +8,13 @@ function routePath(req: Request): string {
     const { path } = route;
     if (typeof path === 'string') return path;
   }
+  // Apollo mounts /graphql as middleware, so it has no req.route. Label it
+  // explicitly rather than hiding the app's main endpoint under "unmatched";
+  // keep everything else "unmatched" to bound label cardinality (e.g. 404
+  // scans of arbitrary paths).
+  if (req.path === '/graphql') {
+    return '/graphql';
+  }
   return 'unmatched';
 }
 
