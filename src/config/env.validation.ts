@@ -6,6 +6,8 @@ import {
   Matches,
   Max,
   Min,
+  MinLength,
+  ValidateIf,
   validateSync,
 } from 'class-validator';
 
@@ -29,6 +31,14 @@ export class EnvironmentVariables {
     message: 'DATABASE_URL must be a postgres:// connection string',
   })
   DATABASE_URL!: string;
+
+  // Required (and non-trivial) in production; optional in dev/test.
+  @ValidateIf(
+    (env: EnvironmentVariables) => env.NODE_ENV === NodeEnv.Production,
+  )
+  @IsString()
+  @MinLength(16)
+  API_KEY_PEPPER?: string;
 }
 
 export function validateEnv(

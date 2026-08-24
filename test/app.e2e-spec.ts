@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { configureApp } from './../src/configure-app';
 
 describe('Foundation (e2e)', () => {
   let app: INestApplication<App>;
@@ -12,6 +13,7 @@ describe('Foundation (e2e)', () => {
       imports: [AppModule],
     }).compile();
     app = moduleFixture.createNestApplication();
+    configureApp(app);
     await app.init();
   });
 
