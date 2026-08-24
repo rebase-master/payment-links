@@ -16,6 +16,9 @@ function serviceWith(findUnique: jest.Mock): ApiKeyService {
 describe('ApiKeyService', () => {
   it('hashes the key with HMAC-SHA256 keyed by the pepper (64-char hex)', () => {
     const service = serviceWith(jest.fn());
+    // Computed independently of hash-api-key.ts, on purpose: this pins the
+    // observable HMAC-SHA256 contract, so a regression inside hashApiKey()
+    // itself still fails a test instead of passing trivially.
     const expected = createHmac('sha256', PEPPER)
       .update('secret-key')
       .digest('hex');
