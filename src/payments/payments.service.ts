@@ -4,6 +4,7 @@ import {
   PaymentLinkNotFoundError,
   PaymentLinkNotPayableError,
   PlatformAccountNotConfiguredError,
+  UnsupportedCurrencyError,
 } from '../common/errors/domain.errors';
 import { PrismaService } from '../database/prisma.service';
 import type { Merchant, PaymentLink, Prisma } from '../generated/prisma/client';
@@ -93,6 +94,20 @@ export class PaymentsService {
             requestHash,
           },
           async () => {
+            // A link can only be created in a currency the platform settles
+            // (one with a clearing account); otherwise paying it would later
+            // fail with an internal error. Reject at creation instead.
+            const clearing = await tx.account.findFirst({
+              where: {
+                merchantId: null,
+                type: 'PLATFORM_CLEARING',
+                currency: input.currency,
+              },
+            });
+            if (!clearing) {
+              throw new UnsupportedCurrencyError(input.currency);
+            }
+
             // merchantId comes from the authenticated merchant, never input.
             const link = await tx.paymentLink.create({
               data: {
@@ -117,12 +132,8 @@ export class PaymentsService {
   }
 
   payLink(input: PayLinkInput): Promise<PaymentResult> {
-    const requestHash = createHash('sha256')
-      .update(input.paymentLinkId)
-      .digest('hex');
-
-    // Key namespaced by link id: reusing a key on a different link is a
-    // different claim, so a shared value cannot be "burned" across links.
+    // No requestHash: the key already embeds the link id and is unique per
+    // (link, client key), so there is no separate request body to compare.
     return this.prisma.$transaction(
       (tx) =>
         this.idempotency.execute<PaymentResult>(
@@ -130,7 +141,6 @@ export class PaymentsService {
           {
             scope: 'payLink',
             key: `${input.paymentLinkId}:${input.idempotencyKey}`,
-            requestHash,
           },
           () => this.settle(tx, input.paymentLinkId),
         ),
@@ -183,22 +193,21 @@ export class PaymentsService {
       },
     });
 
-    // A merchant gets a balance account per currency on first payment; the
-    // platform clearing account is seeded infra and must already exist.
-    const merchantBalance = await tx.account.upsert({
+    // Atomic get-or-create for the merchant's balance account: ON CONFLICT DO
+    // NOTHING then re-select, like the idempotency claim. upsert is not atomic
+    // here — a concurrent first payment can lose a P2002 race and abort the
+    // whole transaction.
+    await tx.$executeRaw`
+      INSERT INTO "accounts" ("id", "merchant_id", "type", "currency")
+      VALUES (gen_random_uuid(), ${link.merchantId}::uuid, 'MERCHANT_BALANCE'::"AccountType", ${link.currency})
+      ON CONFLICT ("merchant_id", "type", "currency") DO NOTHING
+    `;
+    const merchantBalance = await tx.account.findFirstOrThrow({
       where: {
-        merchantId_type_currency: {
-          merchantId: link.merchantId,
-          type: 'MERCHANT_BALANCE',
-          currency: link.currency,
-        },
-      },
-      create: {
         merchantId: link.merchantId,
         type: 'MERCHANT_BALANCE',
         currency: link.currency,
       },
-      update: {},
     });
 
     const clearing = await tx.account.findFirst({

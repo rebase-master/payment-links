@@ -101,4 +101,54 @@ describe('Money path (e2e)', () => {
     expect(res.errors).toBeDefined();
     expect(res.errors?.[0]?.message).toContain('API key');
   });
+
+  it('rejects reusing a createPaymentLink key with a different body', async () => {
+    const key = randomUUID();
+    const first = await gql<{ createPaymentLink: { id: string } }>(
+      CREATE,
+      { input: { amount: '2500', currency: 'AED', idempotencyKey: key } },
+      DEV_API_KEY,
+    );
+    expect(first.data?.createPaymentLink.id).toBeDefined();
+
+    const second = await gql<{ createPaymentLink: unknown }>(
+      CREATE,
+      { input: { amount: '9900', currency: 'AED', idempotencyKey: key } },
+      DEV_API_KEY,
+    );
+    expect(second.errors?.[0]?.extensions?.code).toBe(
+      'IDEMPOTENCY_KEY_CONFLICT',
+    );
+  });
+
+  it('allows only one of two concurrent different-key payments of a link', async () => {
+    const created = await gql<{ createPaymentLink: { id: string } }>(
+      CREATE,
+      {
+        input: {
+          amount: '2500',
+          currency: 'AED',
+          idempotencyKey: randomUUID(),
+        },
+      },
+      DEV_API_KEY,
+    );
+    const linkId = created.data?.createPaymentLink.id;
+
+    const outcomes = await Promise.all([
+      gql<{ payLink: { id: string } }>(PAY, {
+        input: { paymentLinkId: linkId, idempotencyKey: randomUUID() },
+      }),
+      gql<{ payLink: { id: string } }>(PAY, {
+        input: { paymentLinkId: linkId, idempotencyKey: randomUUID() },
+      }),
+    ]);
+
+    const succeeded = outcomes.filter((r) => r.data?.payLink.id).length;
+    const notPayable = outcomes.filter(
+      (r) => r.errors?.[0]?.extensions?.code === 'PAYMENT_LINK_NOT_PAYABLE',
+    ).length;
+    expect(succeeded).toBe(1);
+    expect(notPayable).toBe(1);
+  });
 });
