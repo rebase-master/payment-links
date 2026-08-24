@@ -30,6 +30,15 @@ export class PaymentLinkNotPayableError extends DomainError {
   }
 }
 
+export class UnsupportedCurrencyError extends DomainError {
+  readonly code = 'UNSUPPORTED_CURRENCY';
+  readonly httpStatus = 422;
+
+  constructor(currency: string) {
+    super(`Currency ${currency} is not supported (no clearing account)`);
+  }
+}
+
 // Ops misconfiguration, not a client fault — a 500 that is logged at error and
 // masked from the client by maskError.
 export class PlatformAccountNotConfiguredError extends DomainError {

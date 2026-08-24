@@ -8,7 +8,9 @@ import { Prisma } from '../generated/prisma/client';
 export interface IdempotencyParams {
   scope: string;
   key: string;
-  requestHash: string;
+  // Optional: callers whose key already uniquely identifies the request (e.g.
+  // payLink, keyed by link id) omit it, and the conflict check is skipped.
+  requestHash?: string;
 }
 
 @Injectable()
@@ -28,7 +30,7 @@ export class IdempotencyService {
   ): Promise<T> {
     const claimed = await tx.$queryRaw<{ id: string }[]>`
       INSERT INTO "idempotency_keys" ("id", "scope", "key", "request_hash", "status")
-      VALUES (gen_random_uuid(), ${params.scope}, ${params.key}, ${params.requestHash}, 'IN_PROGRESS'::"IdempotencyStatus")
+      VALUES (gen_random_uuid(), ${params.scope}, ${params.key}, ${params.requestHash ?? ''}, 'IN_PROGRESS'::"IdempotencyStatus")
       ON CONFLICT ("scope", "key") DO NOTHING
       RETURNING "id"
     `;
@@ -54,8 +56,13 @@ export class IdempotencyService {
       where: { scope_key: { scope: params.scope, key: params.key } },
     });
 
-    if (existing && existing.requestHash !== params.requestHash) {
-      // Same key, different request — a client bug, not a legitimate retry.
+    // Only meaningful when the caller provided a hash: same key with a
+    // different request body is a client bug, not a legitimate retry.
+    if (
+      params.requestHash !== undefined &&
+      existing &&
+      existing.requestHash !== params.requestHash
+    ) {
       throw new IdempotencyKeyConflictError(params.key);
     }
     if (
