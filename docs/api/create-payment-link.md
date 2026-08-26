@@ -44,7 +44,7 @@ mutation CreateLink($input: CreatePaymentLinkInput!) {
 | `idempotencyKey` | `String!` | yes | 1–200 chars, client-generated. Retrying with the same key returns the original link instead of creating a duplicate — see below |
 | `description` | `String` | no | Max 255 chars |
 | `reference` | `String` | no | Max 80 chars — your own order/invoice reference |
-| `expiresAt` | `String` | no | Must be a future ISO date-time string, or the field is rejected |
+| `expiresAt` | `String` | no | Must be a future ISO-8601 date-time **with a timezone offset** (`Z` or `±HH:MM`), e.g. `"2027-01-01T00:00:00Z"`. An offset-less value like `"2027-01-01T00:00:00"` is rejected |
 
 ## Example
 
@@ -85,12 +85,14 @@ curl http://localhost:3000/graphql \
 
 ### Errors
 
-GraphQL always responds `200 OK`; failures appear in the `errors` array, with a stable machine-readable `extensions.code`:
+GraphQL always responds `200 OK`, for both domain and auth-guard failures alike — confirmed against `@nestjs/apollo`'s status-preserving plugin (`apollo-base.driver.js`'s `preserveHttpStatusForExecutionErrors`, on by default), which resets the HTTP status to 200 for any error raised while a resolver is executing, guards included. Failures appear in the `errors` array instead, with a stable machine-readable `extensions.code`:
 
 | `extensions.code` | Cause |
 |---|---|
 | `UNAUTHENTICATED` | Missing or invalid `Authorization` bearer token |
-| `BAD_USER_INPUT` / `GRAPHQL_VALIDATION_FAILED` | Input fails validation (bad amount format, malformed currency, key too long, `expiresAt` not in the future, etc.) |
+| `BAD_REQUEST` | `CreatePaymentLinkInput` fails class-validator validation — bad amount format, malformed currency, `idempotencyKey` too long, `expiresAt` not a future timestamp with an offset, etc. (NestJS's `ValidationPipe` throws HTTP 400 by default, which this driver maps to `BAD_REQUEST` — not `BAD_USER_INPUT`) |
+| `BAD_USER_INPUT` | A GraphQL variable's value doesn't match its declared type (e.g. a number sent where the schema expects a string) |
+| `GRAPHQL_VALIDATION_FAILED` | The submitted query/mutation document doesn't match the schema (unknown field, wrong argument name, etc.) |
 | `UNSUPPORTED_CURRENCY` | No platform clearing account exists for the given `currency` |
 | `IDEMPOTENCY_KEY_CONFLICT` | The same `idempotencyKey` was already used with a *different* request body — regenerate the key for genuinely new requests |
 

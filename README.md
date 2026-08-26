@@ -41,6 +41,8 @@ flowchart TB
 
 In the target architecture, a request arrives either through the GraphQL API, where a merchant acts on their own links, or through a webhook, where a payment provider confirms a payment. Both funnel into one payments service that does its work inside a single database transaction and defers any asynchronous follow-up to an outbox. A relay drains that outbox to Kafka, and downstream consumers build their own read models from the resulting events. The webhook path, the relay, and the consumer are the pieces still to come.
 
+For a detailed walk of what's already built — one `payLink` request through the transaction, including the idempotency claim, the double-pay guard, and where the not-yet-built pieces pick up — see [diagrams/paylink-request-lifecycle.svg](diagrams/paylink-request-lifecycle.svg) (also available as [PNG](diagrams/paylink-request-lifecycle.png)).
+
 ## Design notes
 
 **Idempotency.** Creating or paying a link is safe to retry. Each request carries an idempotency key that the service stores before it does any work, so a duplicate request — a network retry, an impatient second tap — returns the original outcome instead of repeating the effect.
