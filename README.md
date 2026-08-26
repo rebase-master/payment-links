@@ -22,22 +22,7 @@ The architecture below shows the target; the design notes mark the planned piece
 
 ## Architecture
 
-```mermaid
-flowchart TB
-  MER["Merchant"] -->|GraphQL, API key| API["API layer"]
-  PSP["Payment provider"] -->|signed webhook| API
-  API --> SVC["Payments service"]
-  SVC --> DB
-  subgraph DB["Single Postgres transaction"]
-    IK["Idempotency keys"]
-    LE["Ledger entries (append-only)"]
-    OB["Outbox"]
-  end
-  OB --> REL["Outbox relay"]
-  REL -->|publish| KAFKA["Kafka"]
-  KAFKA --> CON["Consumer"]
-  CON --> RM["Read model"]
-```
+![Payment link request lifecycle](diagrams/paylink-request-lifecycle.png)
 
 In the target architecture, a request arrives either through the GraphQL API, where a merchant acts on their own links, or through a webhook, where a payment provider confirms a payment. Both funnel into one payments service that does its work inside a single database transaction and defers any asynchronous follow-up to an outbox. A relay drains that outbox to Kafka, and downstream consumers build their own read models from the resulting events. The webhook path, the relay, and the consumer are the pieces still to come.
 
