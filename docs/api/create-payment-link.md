@@ -85,16 +85,16 @@ curl http://localhost:3000/graphql \
 
 ### Errors
 
-GraphQL always responds `200 OK`, for both domain and auth-guard failures alike — confirmed against `@nestjs/apollo`'s status-preserving plugin (`apollo-base.driver.js`'s `preserveHttpStatusForExecutionErrors`, on by default), which resets the HTTP status to 200 for any error raised while a resolver is executing, guards included. Failures appear in the `errors` array instead, with a stable machine-readable `extensions.code`:
+HTTP status depends on *when* the failure happens. Execution-phase failures — domain errors, idempotency conflicts, and auth-guard rejections alike — respond `200 OK` with the failure in the `errors` array: NestJS's Apollo driver normalizes the status back to 200 once a resolver has run (`apollo-base.driver.js`'s `preserveHttpStatusForExecutionErrors`, on by default). Request-phase failures — a malformed document, a variable that doesn't match its declared type, unparseable JSON — never reach a resolver, so nothing normalizes them: they're rejected with **HTTP 400** (`internalErrorClasses.js`'s `SyntaxError`/`ValidationError`, and variable-coercion errors via `status400ForVariableCoercionErrors`, which also defaults to on). Either way, the failure carries a stable machine-readable `extensions.code`:
 
-| `extensions.code` | Cause |
-|---|---|
-| `UNAUTHENTICATED` | Missing or invalid `Authorization` bearer token |
-| `BAD_REQUEST` | `CreatePaymentLinkInput` fails class-validator validation — bad amount format, malformed currency, `idempotencyKey` too long, `expiresAt` not a future timestamp with an offset, etc. (NestJS's `ValidationPipe` throws HTTP 400 by default, which this driver maps to `BAD_REQUEST` — not `BAD_USER_INPUT`) |
-| `BAD_USER_INPUT` | A GraphQL variable's value doesn't match its declared type (e.g. a number sent where the schema expects a string) |
-| `GRAPHQL_VALIDATION_FAILED` | The submitted query/mutation document doesn't match the schema (unknown field, wrong argument name, etc.) |
-| `UNSUPPORTED_CURRENCY` | No platform clearing account exists for the given `currency` |
-| `IDEMPOTENCY_KEY_CONFLICT` | The same `idempotencyKey` was already used with a *different* request body — regenerate the key for genuinely new requests |
+| `extensions.code` | HTTP | Cause |
+|---|---|---|
+| `UNAUTHENTICATED` | 200 | Missing or invalid `Authorization` bearer token |
+| `BAD_REQUEST` | 200 | `CreatePaymentLinkInput` fails class-validator validation — bad amount format, malformed currency, `idempotencyKey` too long, `expiresAt` not a future timestamp with an offset, etc. (NestJS's `ValidationPipe` throws HTTP 400 internally by default, which this driver maps to the GraphQL code `BAD_REQUEST` — not `BAD_USER_INPUT` — but this is still an execution-phase failure, so the *response* is 200) |
+| `BAD_USER_INPUT` | 400 | A GraphQL variable's value doesn't match its declared type (e.g. a number sent where the schema expects a string) — rejected before execution |
+| `GRAPHQL_VALIDATION_FAILED` | 400 | The submitted query/mutation document doesn't match the schema (unknown field, wrong argument name, etc.) — rejected before execution |
+| `UNSUPPORTED_CURRENCY` | 200 | No platform clearing account exists for the given `currency` |
+| `IDEMPOTENCY_KEY_CONFLICT` | 200 | The same `idempotencyKey` was already used with a *different* request body — regenerate the key for genuinely new requests |
 
 ```json
 {
