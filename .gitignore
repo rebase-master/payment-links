@@ -10,6 +10,7 @@ coverage/
 npm-debug.log*
 
 .idea/
+CLAUDE.md
 .vscode/
 .DS_Store
 .claude

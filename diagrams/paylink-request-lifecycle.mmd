@@ -1,0 +1,95 @@
+%%{init: {
+  "theme": "base",
+  "flowchart": { "curve": "basis", "nodeSpacing": 34, "rankSpacing": 46 },
+  "themeVariables": {
+    "fontFamily": "Inter, ui-sans-serif, system-ui, sans-serif",
+    "fontSize": "15px",
+    "lineColor": "#718096",
+    "primaryTextColor": "#172033",
+    "clusterBkg": "#F8FAFC",
+    "clusterBorder": "#CBD5E1"
+  }
+}}%%
+flowchart TB
+    subgraph REQUEST["1 · REQUEST ENTERS"]
+        direction LR
+        CUSTOMER(["Customer<br/><small>clicks Pay</small>"])
+        HTTP["Pino HTTP + metrics middleware<br/><small>request ID · auto-log · latency timer</small>"]
+        GQL["Apollo GraphQL<br/><small>parse · validate · route</small>"]
+        RESOLVER["ValidationPipe + PaymentsResolver<br/><small>UUID/key validation · public · unthrottled</small>"]
+        SERVICE["PaymentsService.payLink()<br/><small>opens the money transaction</small>"]
+
+        CUSTOMER -->|POST /graphql| HTTP --> GQL --> RESOLVER --> SERVICE
+    end
+
+    subgraph TX["2 · ONE POSTGRES TRANSACTION · READ COMMITTED"]
+        direction LR
+        CLAIM[("Claim idempotency key<br/><small>INSERT … ON CONFLICT DO NOTHING<br/>concurrent duplicate waits for the winner</small>")]
+        ACQUIRED{"Claim<br/>acquired?"}
+        CHECK["Load and check link<br/><small>exists · ACTIVE · not expired</small>"]
+        FLIP[("Atomic ACTIVE → PAID<br/><small>different-key race guard</small>")]
+        SETTLE["Synchronous mock settlement<br/><small>no external provider call or real money movement<br/>payment row · accounts · two ledger entries<br/>append-only trigger · outbox row only</small>"]
+        CACHE[("Store exact response<br/><small>idempotency status → COMPLETED</small>")]
+        REPLAY[("Read stored response<br/><small>same-key retry; no effects repeated</small>")]
+        COMMIT["COMMIT<br/><small>all writes become visible together</small>"]
+        ROLLBACK["ROLLBACK<br/><small>including the idempotency claim</small>"]
+
+        CLAIM --> ACQUIRED
+        ACQUIRED -->|new request| CHECK --> FLIP --> SETTLE --> CACHE --> COMMIT
+        ACQUIRED -->|same-key retry| REPLAY -->|completed| COMMIT
+        CHECK -. missing / inactive / expired .-> ROLLBACK
+        FLIP -. another payer won .-> ROLLBACK
+        SETTLE -. any write fails .-> ROLLBACK
+        REPLAY -. incomplete / invariant breach .-> ROLLBACK
+    end
+
+    subgraph OUTCOME["3 · RESPONSE LEAVES"]
+        direction LR
+        SUCCESS["Return payment result<br/><small>new and replayed responses are identical</small>"]
+        ERROR["GraphQL error formatting<br/><small>parse/DTO failures → Apollo client error<br/>safe DomainErrors → stable code<br/>5xx/unexpected → INTERNAL_SERVER_ERROR</small>"]
+        FINISH(["Customer receives response<br/><small>status + latency metric recorded</small>"])
+
+        SUCCESS --> FINISH
+        ERROR --> FINISH
+    end
+
+    subgraph PENDING["4 · ASYNC DELIVERY · PENDING"]
+        direction LR
+        OUTBOX_STORED[("Committed outbox row<br/><small>IMPLEMENTED · payment.succeeded</small>")]
+        RELAY["Outbox relay<br/><small>TODO · poll and publish unpublished rows</small>"]
+        KAFKA["Kafka topic<br/><small>TODO · broker integration</small>"]
+        CONSUMER["Consumer + read model<br/><small>TODO · downstream projection</small>"]
+
+        OUTBOX_STORED -.-> RELAY -.-> KAFKA -.-> CONSUMER
+    end
+
+    SERVICE --> CLAIM
+    GQL -. invalid document; no transaction .-> ERROR
+    RESOLVER -. invalid DTO; no transaction .-> ERROR
+    COMMIT --> SUCCESS
+    ROLLBACK --> ERROR
+    COMMIT -. outbox row becomes visible .-> OUTBOX_STORED
+
+    classDef actor fill:#EEF2FF,stroke:#8795E8,color:#273065,stroke-width:1.5px
+    classDef boundary fill:#F3F0FF,stroke:#A78BFA,color:#3D2C67,stroke-width:1.5px
+    classDef tx fill:#ECF8F5,stroke:#55B9A8,color:#174A43,stroke-width:1.5px
+    classDef db fill:#EDF6FF,stroke:#6BA3E6,color:#173E68,stroke-width:1.5px
+    classDef decide fill:#FFF7E3,stroke:#E5B94D,color:#664B10,stroke-width:1.5px
+    classDef success fill:#EAF7EF,stroke:#55A970,color:#194E2B,stroke-width:1.5px
+    classDef failure fill:#FFF0F1,stroke:#E5787F,color:#6C252B,stroke-width:1.5px
+    classDef pending fill:#FFF8E7,stroke:#D5A94E,color:#65480E,stroke-width:1.5px,stroke-dasharray:6 4
+
+    class CUSTOMER,FINISH actor
+    class HTTP,GQL,RESOLVER boundary
+    class SERVICE,CHECK,SETTLE tx
+    class CLAIM,FLIP,CACHE,REPLAY db
+    class ACQUIRED decide
+    class COMMIT,SUCCESS success
+    class ROLLBACK,ERROR failure
+    class OUTBOX_STORED db
+    class RELAY,KAFKA,CONSUMER pending
+
+    style REQUEST fill:#FBFAFF,stroke:#DDD6FE,stroke-width:1.5px
+    style TX fill:#F7FBFA,stroke:#A7D8CF,stroke-width:1.5px
+    style OUTCOME fill:#FAFBFC,stroke:#D7DEE8,stroke-width:1.5px
+    style PENDING fill:#FFFCF3,stroke:#E2C277,stroke-width:1.5px
