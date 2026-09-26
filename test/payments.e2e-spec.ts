@@ -29,6 +29,11 @@ const PAY = `
     payLink(input: $input) { id status amount currency }
   }
 `;
+const LINK = `
+  query Link($id: ID!){
+    paymentLink(id: $id) { id status }
+  }
+`;
 
 describe('Money path (e2e)', () => {
   let app: INestApplication<App>;
@@ -100,6 +105,11 @@ describe('Money path (e2e)', () => {
 
     expect(res.errors).toBeDefined();
     expect(res.errors?.[0]?.message).toContain('API key');
+  });
+
+  it('rejects a non-UUID paymentLink id as a client error, not a 500', async () => {
+    const res = await gql<{ paymentLink: unknown }>(LINK, { id: 'not-a-UUID' });
+    expect(res.errors?.[0]?.extensions?.code).toBe('BAD_REQUEST');
   });
 
   it('rejects reusing a createPaymentLink key with a different body', async () => {

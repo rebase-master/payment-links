@@ -1,4 +1,4 @@
-import { UseGuards } from '@nestjs/common';
+import { ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { Args, ID, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { CurrentMerchant } from '../auth/current-merchant.decorator';
@@ -19,7 +19,7 @@ export class PaymentsResolver {
 
   @Query(() => PaymentLinkType, { nullable: true })
   paymentLink(
-    @Args('id', { type: () => ID }) id: string,
+    @Args('id', { type: () => ID }, new ParseUUIDPipe()) id: string,
   ): Promise<PaymentLinkResult | null> {
     return this.payments.getPaymentLink(id);
   }
