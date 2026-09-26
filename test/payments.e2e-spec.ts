@@ -121,6 +121,22 @@ describe('Money path (e2e)', () => {
     );
   });
 
+  it('accepts a max-length (200 char) idempotency key without a server error', async () => {
+    const body = await gql<{ createPaymentLink: { id: string } }>(
+      CREATE,
+      {
+        input: {
+          amount: '2500',
+          currency: 'AED',
+          idempotencyKey: `${randomUUID()}${'k'.repeat(164)}`,
+        },
+      },
+      DEV_API_KEY,
+    );
+    expect(body.errors).toBeUndefined();
+    expect(body.data?.createPaymentLink.id).toBeDefined();
+  });
+
   it('allows only one of two concurrent different-key payments of a link', async () => {
     const created = await gql<{ createPaymentLink: { id: string } }>(
       CREATE,

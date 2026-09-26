@@ -82,7 +82,7 @@ export class PaymentsService {
       )
       .digest('hex');
 
-    // Key namespaced by merchant so two merchants cannot collide on a shared
+    //  Idempotency is scoped per merchant via ownerId so two merchants cannot collide on a shared
     // value; a retry with the same key + input replays the same link.
     return this.prisma.$transaction(
       (tx) =>
@@ -90,7 +90,8 @@ export class PaymentsService {
           tx,
           {
             scope: 'createPaymentLink',
-            key: `${merchant.id}:${input.idempotencyKey}`,
+            ownerId: merchant.id,
+            key: input.idempotencyKey,
             requestHash,
           },
           async () => {
@@ -140,7 +141,8 @@ export class PaymentsService {
           tx,
           {
             scope: 'payLink',
-            key: `${input.paymentLinkId}:${input.idempotencyKey}`,
+            ownerId: input.paymentLinkId,
+            key: input.idempotencyKey,
           },
           () => this.settle(tx, input.paymentLinkId),
         ),

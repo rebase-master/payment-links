@@ -11,6 +11,7 @@ import {
 
 const PARAMS: IdempotencyParams = {
   scope: 'payLink',
+  ownerId: 'owner-1',
   key: 'key-1',
   requestHash: 'hash-1',
 };
@@ -78,6 +79,28 @@ describe('IdempotencyService', () => {
 
     expect(result).toEqual({ paymentId: 'p1' });
     expect(work).not.toHaveBeenCalled();
+  });
+
+  it('looks up the stored row by scope, owner and key', async () => {
+    const tx = makeTx();
+    tx.$queryRaw.mockResolvedValue([]);
+    tx.idempotencyKey.findUnique.mockResolvedValue({
+      requestHash: 'hash-1',
+      status: 'COMPLETED',
+      responseBody: { paymentId: 'p1' },
+    });
+    await service.execute(asTx(tx), PARAMS, () =>
+      Promise.resolve({ paymentId: 'p1' }),
+    );
+    expect(tx.idempotencyKey.findUnique).toHaveBeenCalledWith({
+      where: {
+        scope_ownerId_key: {
+          scope: 'payLink',
+          ownerId: 'owner-1',
+          key: 'key-1',
+        },
+      },
+    });
   });
 
   it('rejects a key reused with a different request', async () => {
