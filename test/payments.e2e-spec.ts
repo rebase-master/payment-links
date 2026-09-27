@@ -5,6 +5,7 @@ import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { configureApp } from './../src/configure-app';
+import { PrismaService } from '../src/database/prisma.service';
 
 // Resolves to the seeded demo merchant (see prisma/seed.ts). Run
 // `npm run db:seed` against the test database first.
@@ -64,6 +65,20 @@ describe('Money path (e2e)', () => {
     return res.body as GqlBody<T>;
   }
 
+  async function createExpiredLink(): Promise<string> {
+    const prisma = app.get(PrismaService);
+    const merchant = await prisma.merchant.findFirstOrThrow();
+    const link = await prisma.paymentLink.create({
+      data: {
+        merchantId: merchant.id,
+        amount: 2500n,
+        currency: 'AED',
+        expiresAt: new Date(Date.now() - 60_000),
+      },
+    });
+    return link.id;
+  }
+
   it('creates a link (authenticated) and pays it, idempotently', async () => {
     const created = await gql<{
       createPaymentLink: { id: string; amount: string; status: string };
@@ -96,6 +111,22 @@ describe('Money path (e2e)', () => {
       input: { paymentLinkId: link?.id, idempotencyKey: payKey },
     });
     expect(replay.data?.payLink.id).toBe(paid.data?.payLink.id);
+  });
+
+  it('reports a link past its expiry as EXPIRED', async () => {
+    const id = await createExpiredLink();
+    const res = await gql<{ paymentLink: { status: string } }>(LINK, { id });
+
+    expect(res.data?.paymentLink.status).toBe('EXPIRED');
+  });
+
+  it('refuses to pay a link past its expiry', async () => {
+    const id = await createExpiredLink();
+    const res = await gql<{ payLink: unknown }>(PAY, {
+      input: { paymentLinkId: id, idempotencyKey: randomUUID() },
+    });
+
+    expect(res.errors?.[0]?.extensions?.code).toBe('PAYMENT_LINK_NOT_PAYABLE');
   });
 
   it('rejects createPaymentLink without an API key', async () => {
