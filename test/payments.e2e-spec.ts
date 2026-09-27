@@ -6,6 +6,7 @@ import type { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { configureApp } from './../src/configure-app';
 import { PrismaService } from '../src/database/prisma.service';
+import { Client } from 'pg';
 
 // Resolves to the seeded demo merchant (see prisma/seed.ts). Run
 // `npm run db:seed` against the test database first.
@@ -208,4 +209,40 @@ describe('Money path (e2e)', () => {
     expect(succeeded).toBe(1);
     expect(notPayable).toBe(1);
   });
+
+  // Enable once a lock timeout (55P03) on the claim maps to
+  // IdempotencyInProgressError. Until then contention fails at the 2s
+  // lock_timeout, but as a masked 500.
+  it.skip('answers IDEMPOTENCY_IN_PROGRESS quickly while the same key is held open', async () => {
+    const prisma = app.get(PrismaService);
+    const merchant = await prisma.merchant.findFirstOrThrow();
+    const key = randomUUID();
+
+    const holder = new Client({ connectionString: process.env.DATABASE_URL });
+    await holder.connect();
+
+    try {
+      await holder.query('BEGIN');
+      await holder.query(
+        `INSERT INTO "idempotency_keys" ("id", "scope", "owner_id", "key", "request_hash", "status")
+         VALUES (gen_random_uuid(), 'createPaymentLink', $1, $2, '', 'IN_PROGRESS')`,
+        [merchant.id, key],
+      );
+
+      const started = Date.now();
+      const res = await gql<{ createPaymentLink: unknown }>(
+        CREATE,
+        { input: { amount: '2500', currency: 'AED', idempotencyKey: key } },
+        DEV_API_KEY,
+      );
+
+      const elapsedMs = Date.now() - started;
+
+      expect(res.errors?.[0]?.extensions?.code).toBe('IDEMPOTENCY_IN_PROGRESS');
+      expect(elapsedMs).toBeLessThan(4000);
+    } finally {
+      await holder.query('ROLLBACK');
+      await holder.end();
+    }
+  }, 15_000);
 });

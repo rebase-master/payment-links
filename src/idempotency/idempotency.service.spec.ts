@@ -18,6 +18,7 @@ const PARAMS: IdempotencyParams = {
 
 interface TxMock {
   $queryRaw: jest.Mock;
+  $executeRaw: jest.Mock;
   idempotencyKey: {
     findUnique: jest.Mock;
     update: jest.Mock;
@@ -27,6 +28,7 @@ interface TxMock {
 function makeTx(): TxMock {
   return {
     $queryRaw: jest.fn(),
+    $executeRaw: jest.fn().mockResolvedValue(0),
     idempotencyKey: {
       findUnique: jest.fn(),
       update: jest.fn().mockResolvedValue({}),
@@ -63,6 +65,31 @@ describe('IdempotencyService', () => {
       where: { id: 'row-1' },
       data: { status: 'COMPLETED', responseBody: { paymentId: 'p1' } },
     });
+  });
+
+  it('applies the short lock_timeout to the claim only, not the work', async () => {
+    const tx = makeTx();
+    const statements: string[] = [];
+    tx.$executeRaw.mockImplementation((sql: TemplateStringsArray) => {
+      statements.push(sql.join(''));
+      return Promise.resolve(0);
+    });
+    tx.$queryRaw.mockImplementation(() => {
+      statements.push('claim');
+      return Promise.resolve([{ id: 'row-1' }]);
+    });
+
+    await service.execute(asTx(tx), PARAMS, () => {
+      statements.push('work');
+      return Promise.resolve({ paymentId: 'p1' });
+    });
+
+    expect(statements).toEqual([
+      "SET LOCAL lock_timeout = '2s'",
+      'claim',
+      'SET LOCAL lock_timeout = DEFAULT',
+      'work',
+    ]);
   });
 
   it('replays the stored response and skips the work on a duplicate', async () => {
