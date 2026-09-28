@@ -92,6 +92,18 @@ describe('IdempotencyService', () => {
     ]);
   });
 
+  it('rethrows any other claim failure unchanged', async () => {
+    const tx = makeTx();
+    const original = new Error('boom');
+    tx.$queryRaw.mockRejectedValue(original);
+    const work = jest.fn(() => Promise.resolve({ paymentId: 'p1' }));
+
+    await expect(service.execute(asTx(tx), PARAMS, work)).rejects.toBe(
+      original,
+    );
+    expect(work).not.toHaveBeenCalled();
+  });
+
   it('replays the stored response and skips the work on a duplicate', async () => {
     const tx = makeTx();
     tx.$queryRaw.mockResolvedValue([]);

@@ -4,6 +4,7 @@ import {
   IdempotencyKeyConflictError,
 } from '../common/errors/domain.errors';
 import { Prisma } from '../generated/prisma/client';
+import { pgSqlState } from '../database/pg-errors';
 
 export interface IdempotencyParams {
   scope: string;
@@ -35,12 +36,22 @@ export class IdempotencyService {
     // the whole transaction, so it is reset right after the claim; the
     // caller's work keeps the normal lock-wait behaviour.
     await tx.$executeRaw`SET LOCAL lock_timeout = '2s'`;
-    const claimed = await tx.$queryRaw<{ id: string }[]>`
+    let claimed: { id: string }[];
+    try {
+      claimed = await tx.$queryRaw<{ id: string }[]>`
       INSERT INTO "idempotency_keys" ("id", "scope", "owner_id", "key", "request_hash", "status")
       VALUES (gen_random_uuid(), ${params.scope}, ${params.ownerId}::uuid, ${params.key}, ${params.requestHash ?? ''}, 'IN_PROGRESS'::"IdempotencyStatus")
       ON CONFLICT ("scope", "owner_id", "key") DO NOTHING
       RETURNING "id"
     `;
+    } catch (error: unknown) {
+      // Another request holds this key and has not committed. The
+      // transaction is now aborted, so throw before touching it again.
+      if (pgSqlState(error) === '55P03') {
+        throw new IdempotencyInProgressError(params.key);
+      }
+      throw error;
+    }
     await tx.$executeRaw`SET LOCAL lock_timeout = DEFAULT`;
 
     const [claimedRow] = claimed;
