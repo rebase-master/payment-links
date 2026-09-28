@@ -6,6 +6,7 @@ import type { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { configureApp } from './../src/configure-app';
 import { PrismaService } from '../src/database/prisma.service';
+import { Client } from 'pg';
 
 // Resolves to the seeded demo merchant (see prisma/seed.ts). Run
 // `npm run db:seed` against the test database first.
@@ -208,4 +209,87 @@ describe('Money path (e2e)', () => {
     expect(succeeded).toBe(1);
     expect(notPayable).toBe(1);
   });
+
+  it('answers IDEMPOTENCY_IN_PROGRESS quickly while the same key is held open', async () => {
+    const prisma = app.get(PrismaService);
+    const merchant = await prisma.merchant.findFirstOrThrow();
+    const key = randomUUID();
+
+    const holder = new Client({ connectionString: process.env.DATABASE_URL });
+    await holder.connect();
+
+    try {
+      await holder.query('BEGIN');
+      await holder.query(
+        `INSERT INTO "idempotency_keys" ("id", "scope", "owner_id", "key", "request_hash", "status")
+         VALUES (gen_random_uuid(), 'createPaymentLink', $1, $2, '', 'IN_PROGRESS')`,
+        [merchant.id, key],
+      );
+
+      const started = Date.now();
+      const res = await gql<{ createPaymentLink: unknown }>(
+        CREATE,
+        { input: { amount: '2500', currency: 'AED', idempotencyKey: key } },
+        DEV_API_KEY,
+      );
+
+      const elapsedMs = Date.now() - started;
+
+      expect(res.errors?.[0]?.extensions?.code).toBe('IDEMPOTENCY_IN_PROGRESS');
+      expect(elapsedMs).toBeLessThan(4000);
+    } finally {
+      await holder.query('ROLLBACK');
+      await holder.end();
+    }
+  }, 15_000);
+
+  it('waits for a held same-key claim and replays it once that claim commits', async () => {
+    const created = await gql<{ createPaymentLink: { id: string } }>(
+      CREATE,
+      {
+        input: {
+          amount: '2500',
+          currency: 'AED',
+          idempotencyKey: randomUUID(),
+        },
+      },
+      DEV_API_KEY,
+    );
+    const linkId = created.data?.createPaymentLink.id;
+    const key = randomUUID();
+    const stored = {
+      id: randomUUID(),
+      paymentLinkId: linkId,
+      status: 'SUCCEEDED',
+      amount: '2500',
+      currency: 'AED',
+    };
+    // A completed claim, held uncommitted: a first request that is about to
+    // finish. Its stored response is what the second request must receive.
+    const holder = new Client({ connectionString: process.env.DATABASE_URL });
+    await holder.connect();
+    try {
+      await holder.query('BEGIN');
+      await holder.query(
+        `INSERT INTO "idempotency_keys" ("id", "scope", "owner_id", "key", "request_hash", "status", "response_body") VALUES( gen_random_uuid(), 'payLink', $1, $2, '', 'COMPLETED', $3)`,
+        [linkId, key, JSON.stringify(stored)],
+      );
+      const started = Date.now();
+      const pending = gql<{ payLink: { id: string } }>(PAY, {
+        input: { paymentLinkId: linkId, idempotencyKey: key },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await holder.query('COMMIT');
+      const res = await pending;
+
+      expect(res.data?.payLink.id).toBe(stored.id);
+      expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+    } finally {
+      await holder.end();
+    }
+    const link = await gql<{ paymentLink: { status: string } }>(LINK, {
+      id: linkId,
+    });
+    expect(link.data?.paymentLink.status).toBe('ACTIVE');
+  }, 15_000);
 });

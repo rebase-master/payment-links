@@ -16,9 +16,15 @@ import { OutboxService } from '../outbox/outbox.service';
 // webhook phase replaces this with a signature-verified provider callback.
 const PROVIDER = 'mock_psp';
 
-// Concurrent same-key requests block on the idempotency INSERT until the first
-// commits; allow room beyond Prisma's 5s default so contention surfaces as a
-// wait rather than a "Transaction already closed".
+// Timeout bounds on the money path, innermost first:
+// - lock_timeout 2s (set by IdempotencyService before the claim): a same-key
+//   request waiting on an uncommitted first attempt gives up here (55P03).
+// - statement_timeout 5s / query_timeout 7s (PrismaService): cap any single
+//   statement, server-side first.
+// - timeout 15s below: caps the whole interactive transaction.
+// So same-key contention fails after ~2s, never by waiting out the
+// transaction. That 55P03 is not yet mapped to IDEMPOTENCY_IN_PROGRESS, so
+// for now it still surfaces as a masked 500.
 const TX_OPTIONS = {
   isolationLevel: 'ReadCommitted',
   timeout: 15_000,

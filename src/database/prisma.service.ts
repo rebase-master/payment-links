@@ -27,7 +27,13 @@ export class PrismaService
           // A future reporting/batch job that needs longer should get its
           // own client or a per-query `SET LOCAL statement_timeout`, not a
           // change here.
-          query_timeout: 5000,
+          //
+          // statement_timeout is enforced by Postgres and fails with a
+          // SQLSTATE (57014). query_timeout is pg's client-side timer and
+          // fails with a bare "Query read timeout"; it sits above
+          // statement_timeout so it only fires as a backstop when the server
+          // is unreachable, never in a race with the server-side cancel.
+          query_timeout: 7000,
           statement_timeout: 5000,
           max: 10,
         },
