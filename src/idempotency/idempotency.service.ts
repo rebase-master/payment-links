@@ -8,6 +8,7 @@ import { Prisma } from '../generated/prisma/client';
 export interface IdempotencyParams {
   scope: string;
   key: string;
+  ownerId: string;
   // Optional: callers whose key already uniquely identifies the request (e.g.
   // payLink, keyed by link id) omit it, and the conflict check is skipped.
   requestHash?: string;
@@ -29,9 +30,9 @@ export class IdempotencyService {
     work: () => Promise<T>,
   ): Promise<T> {
     const claimed = await tx.$queryRaw<{ id: string }[]>`
-      INSERT INTO "idempotency_keys" ("id", "scope", "key", "request_hash", "status")
-      VALUES (gen_random_uuid(), ${params.scope}, ${params.key}, ${params.requestHash ?? ''}, 'IN_PROGRESS'::"IdempotencyStatus")
-      ON CONFLICT ("scope", "key") DO NOTHING
+      INSERT INTO "idempotency_keys" ("id", "scope", "owner_id", "key", "request_hash", "status")
+      VALUES (gen_random_uuid(), ${params.scope}, ${params.ownerId}::uuid, ${params.key}, ${params.requestHash ?? ''}, 'IN_PROGRESS'::"IdempotencyStatus")
+      ON CONFLICT ("scope", "owner_id", "key") DO NOTHING
       RETURNING "id"
     `;
 
@@ -53,7 +54,13 @@ export class IdempotencyService {
     params: IdempotencyParams,
   ): Promise<T> {
     const existing = await tx.idempotencyKey.findUnique({
-      where: { scope_key: { scope: params.scope, key: params.key } },
+      where: {
+        scope_ownerId_key: {
+          scope: params.scope,
+          ownerId: params.ownerId,
+          key: params.key,
+        },
+      },
     });
 
     // Only meaningful when the caller provided a hash: same key with a

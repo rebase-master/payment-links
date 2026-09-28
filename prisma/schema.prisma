@@ -132,6 +132,7 @@ model LedgerEntry {
 model IdempotencyKey {
   id           String            @id @default(uuid()) @db.Uuid
   scope        String            @db.VarChar(60)
+  ownerId      String            @map("owner_id") @db.Uuid
   key          String            @db.VarChar(200)
   requestHash  String            @map("request_hash") @db.VarChar(64)
   status       IdempotencyStatus @default(IN_PROGRESS)
@@ -144,7 +145,7 @@ model IdempotencyKey {
   // (createPaymentLink), so callers cannot collide on a shared value. A
   // dedicated merchant_id column plus response_status / expires_at / locked_at
   // are deferred to the idempotency-hardening pass.
-  @@unique([scope, key])
+  @@unique([scope, ownerId, key])
   @@map("idempotency_keys")
 }
 

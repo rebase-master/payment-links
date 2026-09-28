@@ -84,8 +84,23 @@ describe('PaymentsService.payLink', () => {
       idempotencyKey: 'idem-1',
     });
 
-    expect(tx.paymentLink.updateMany).toHaveBeenCalledWith({
-      where: { id: 'link-1', status: 'ACTIVE' },
+    const updateManyCalls = tx.paymentLink.updateMany.mock.calls as unknown[][];
+    const updateManyArgs = updateManyCalls[0]?.[0] as {
+      where: {
+        id: string;
+        status: string;
+        OR: [{ expiresAt: null }, { expiresAt: { gt: Date } }];
+      };
+      data: { status: string };
+    };
+    const { gt } = updateManyArgs.where.OR[1].expiresAt;
+    expect(gt).toBeInstanceOf(Date);
+    expect(updateManyArgs).toEqual({
+      where: {
+        id: 'link-1',
+        status: 'ACTIVE',
+        OR: [{ expiresAt: null }, { expiresAt: { gt } }],
+      },
       data: { status: 'PAID' },
     });
 
@@ -115,6 +130,38 @@ describe('PaymentsService.payLink', () => {
       status: 'SUCCEEDED',
       amount: '2500',
       currency: 'AED',
+    });
+  });
+
+  it('folds expiry into the atomic guard', async () => {
+    const tx = makeTx();
+
+    tx.paymentLink.findUnique.mockResolvedValue(ACTIVE_LINK);
+    const { service } = makeService(tx);
+
+    await service.payLink({
+      paymentLinkId: 'link-1',
+      idempotencyKey: 'idem-1',
+    });
+
+    const updateManyCalls = tx.paymentLink.updateMany.mock.calls as unknown[][];
+    const updateManyArgs = updateManyCalls[0]?.[0] as {
+      where: {
+        id: string;
+        status: string;
+        OR: [{ expiresAt: null }, { expiresAt: { gt: Date } }];
+      };
+      data: { status: string };
+    };
+    const { gt } = updateManyArgs.where.OR[1].expiresAt;
+    expect(gt).toBeInstanceOf(Date);
+    expect(updateManyArgs).toEqual({
+      where: {
+        id: 'link-1',
+        status: 'ACTIVE',
+        OR: [{ expiresAt: null }, { expiresAt: { gt } }],
+      },
+      data: { status: 'PAID' },
     });
   });
 

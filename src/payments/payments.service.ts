@@ -82,7 +82,7 @@ export class PaymentsService {
       )
       .digest('hex');
 
-    // Key namespaced by merchant so two merchants cannot collide on a shared
+    //  Idempotency is scoped per merchant via ownerId so two merchants cannot collide on a shared
     // value; a retry with the same key + input replays the same link.
     return this.prisma.$transaction(
       (tx) =>
@@ -90,7 +90,8 @@ export class PaymentsService {
           tx,
           {
             scope: 'createPaymentLink',
-            key: `${merchant.id}:${input.idempotencyKey}`,
+            ownerId: merchant.id,
+            key: input.idempotencyKey,
             requestHash,
           },
           async () => {
@@ -140,7 +141,8 @@ export class PaymentsService {
           tx,
           {
             scope: 'payLink',
-            key: `${input.paymentLinkId}:${input.idempotencyKey}`,
+            ownerId: input.paymentLinkId,
+            key: input.idempotencyKey,
           },
           () => this.settle(tx, input.paymentLinkId),
         ),
@@ -168,13 +170,21 @@ export class PaymentsService {
       throw new PaymentLinkNotPayableError(paymentLinkId, 'link has expired');
     }
 
-    // Atomic ACTIVE -> PAID: the row's own guard against a concurrent,
-    // different-key payment of the same link. Idempotency dedupes same-key
+    // Atomic ACTIVE -> PAID, gated on not-yet-expired: the row's own guard
+    // against a concurrent different-key payment of the same link, and
+    // against paying past expiry, enforced by the WHERE clause itself rather
+    // than the JS check above it.
+    // Idempotency dedupes same-key
     // retries; this stops double payment across distinct keys.
     const flipped = await tx.paymentLink.updateMany({
-      where: { id: paymentLinkId, status: 'ACTIVE' },
+      where: {
+        id: paymentLinkId,
+        status: 'ACTIVE',
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
       data: { status: 'PAID' },
     });
+
     if (flipped.count === 0) {
       throw new PaymentLinkNotPayableError(
         paymentLinkId,
@@ -265,12 +275,20 @@ export class PaymentsService {
   }
 }
 
+function isExpired(link: PaymentLink): boolean {
+  return (
+    link.status == 'ACTIVE' &&
+    link.expiresAt !== null &&
+    link.expiresAt.getTime() <= Date.now()
+  );
+}
+
 function toPaymentLinkResult(link: PaymentLink): PaymentLinkResult {
   return {
     id: link.id,
     amount: link.amount.toString(),
     currency: link.currency,
-    status: link.status,
+    status: isExpired(link) ? 'EXPIRED' : link.status,
     description: link.description,
     reference: link.reference,
     expiresAt: link.expiresAt ? link.expiresAt.toISOString() : null,
