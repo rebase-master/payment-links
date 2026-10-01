@@ -1,5 +1,6 @@
 import { Field, ID, InputType } from '@nestjs/graphql';
-import { IsUUID, MaxLength, MinLength } from 'class-validator';
+import { Validate, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { HasNoControlCharsConstraint } from '../../common/validation/has-no-control-chars.validator';
 
 @InputType()
 export class PayLinkInput {
@@ -13,5 +14,6 @@ export class PayLinkInput {
   })
   @MinLength(1)
   @MaxLength(200)
+  @Validate(HasNoControlCharsConstraint)
   idempotencyKey!: string;
 }

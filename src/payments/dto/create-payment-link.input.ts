@@ -8,6 +8,7 @@ import {
 } from 'class-validator';
 import { IsFutureDateStringConstraint } from '../../common/validation/is-future-date-string.validator';
 import { IsInt64StringConstraint } from '../../common/validation/is-int64-string.validator';
+import { HasNoControlCharsConstraint } from '../../common/validation/has-no-control-chars.validator';
 
 @InputType()
 export class CreatePaymentLinkInput {
@@ -24,11 +25,13 @@ export class CreatePaymentLinkInput {
   @Field(() => String, { nullable: true })
   @IsOptional()
   @MaxLength(255)
+  @Validate(HasNoControlCharsConstraint)
   description?: string;
 
   @Field(() => String, { nullable: true })
   @IsOptional()
   @MaxLength(80)
+  @Validate(HasNoControlCharsConstraint)
   reference?: string;
 
   @Field(() => String, { nullable: true })
@@ -42,5 +45,6 @@ export class CreatePaymentLinkInput {
   })
   @MinLength(1)
   @MaxLength(200)
+  @Validate(HasNoControlCharsConstraint)
   idempotencyKey!: string;
 }
