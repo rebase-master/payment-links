@@ -1,12 +1,15 @@
 import { validateEnv } from './env.validation';
 
 describe('validateEnv', () => {
-  const valid = { DATABASE_URL: 'postgresql://u:p@localhost:5432/db' };
+  const valid = {
+    NODE_ENV: 'test',
+    DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
+  };
 
   it('accepts valid config and applies defaults', () => {
     const env = validateEnv(valid);
     expect(env.DATABASE_URL).toBe(valid.DATABASE_URL);
-    expect(env.NODE_ENV).toBe('development');
+    expect(env.NODE_ENV).toBe('test');
     expect(env.PORT).toBe(3000);
   });
 
@@ -30,6 +33,12 @@ describe('validateEnv', () => {
 
   it('throws when NODE_ENV is invalid', () => {
     expect(() => validateEnv({ ...valid, NODE_ENV: 'staging' })).toThrow(
+      /NODE_ENV/,
+    );
+  });
+
+  it('throws when NODE_ENV is missing', () => {
+    expect(() => validateEnv({ DATABASE_URL: valid.DATABASE_URL })).toThrow(
       /NODE_ENV/,
     );
   });
