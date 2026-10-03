@@ -1,15 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
 import { LoggerModule } from 'nestjs-pino';
-import { validateEnv } from './config/env.validation';
+import { NodeEnv, validateEnv } from './config/env.validation';
 import { loggerConfig } from './logging/logger.config';
-import { maskError } from './common/graphql/mask-error';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { PaymentsModule } from './payments/payments.module';
+import { graphqlOptions } from './common/graphql/graphql-options';
 
 @Module({
   imports: [
@@ -18,10 +18,11 @@ import { PaymentsModule } from './payments/payments.module';
       validate: validateEnv,
     }),
     LoggerModule.forRoot(loggerConfig()),
-    GraphQLModule.forRoot<ApolloDriverConfig>({
+    GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: true,
-      formatError: maskError,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) =>
+        graphqlOptions(config.getOrThrow<NodeEnv>('NODE_ENV')),
     }),
     DatabaseModule,
     HealthModule,
