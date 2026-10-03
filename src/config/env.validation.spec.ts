@@ -42,4 +42,32 @@ describe('validateEnv', () => {
       /NODE_ENV/,
     );
   });
+
+  it.each(['development', 'production'])(
+    'throws when API_KEY_PEPPER is missing in %s',
+    (NODE_ENV) => {
+      expect(() => validateEnv({ ...valid, NODE_ENV })).toThrow(
+        /API_KEY_PEPPER/,
+      );
+    },
+  );
+
+  it('throws when API_KEY_PEPPER is blank in development', () => {
+    expect(() =>
+      validateEnv({ ...valid, NODE_ENV: 'development', API_KEY_PEPPER: '' }),
+    ).toThrow(/API_KEY_PEPPER/);
+  });
+
+  it('accepts a 16+ character API_KEY_PEPPER in development', () => {
+    const env = validateEnv({
+      ...valid,
+      NODE_ENV: 'development',
+      API_KEY_PEPPER: 'x'.repeat(16),
+    });
+    expect(env.API_KEY_PEPPER).toBe('x'.repeat(16));
+  });
+
+  it('allows API_KEY_PEPPER to be omitted in test', () => {
+    expect(validateEnv(valid).API_KEY_PEPPER).toBeUndefined();
+  });
 });

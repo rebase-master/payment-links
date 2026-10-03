@@ -32,10 +32,10 @@ export class EnvironmentVariables {
   })
   DATABASE_URL!: string;
 
-  // Required (and non-trivial) in production; optional in dev/test.
-  @ValidateIf(
-    (env: EnvironmentVariables) => env.NODE_ENV === NodeEnv.Production,
-  )
+  // Required (and non-trivial) everywhere except test. Optional only in test
+  // so the suite runs without a secret; a missing NODE_ENV no longer reaches
+  // here because NODE_ENV itself is required.
+  @ValidateIf((env: EnvironmentVariables) => env.NODE_ENV !== NodeEnv.Test)
   @IsString()
   @MinLength(16)
   API_KEY_PEPPER?: string;

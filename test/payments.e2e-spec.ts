@@ -7,6 +7,7 @@ import { AppModule } from './../src/app.module';
 import { configureApp } from './../src/configure-app';
 import { PrismaService } from '../src/database/prisma.service';
 import { Client } from 'pg';
+import { ApiKeyService } from '../src/auth/api-key.service';
 
 // Resolves to the seeded demo merchant (see prisma/seed.ts). Run
 // `npm run db:seed` against the test database first.
@@ -68,7 +69,7 @@ describe('Money path (e2e)', () => {
 
   async function createExpiredLink(): Promise<string> {
     const prisma = app.get(PrismaService);
-    const merchant = await prisma.merchant.findFirstOrThrow();
+    const merchant = await demoMerchant();
     const link = await prisma.paymentLink.create({
       data: {
         merchantId: merchant.id,
@@ -78,6 +79,16 @@ describe('Money path (e2e)', () => {
       },
     });
     return link.id;
+  }
+
+  // The merchant DEV_API_KEY authenticates as, resolved through the same
+  // service the auth guard uses, so it tracks the configured pepper.
+  async function demoMerchant() {
+    const merchant = await app.get(ApiKeyService).resolveMerchant(DEV_API_KEY);
+    if (!merchant) {
+      throw new Error('Demo merchant not found; run `npm run db:seed`');
+    }
+    return merchant;
   }
 
   it('creates a link (authenticated) and pays it, idempotently', async () => {
@@ -211,8 +222,7 @@ describe('Money path (e2e)', () => {
   });
 
   it('answers IDEMPOTENCY_IN_PROGRESS quickly while the same key is held open', async () => {
-    const prisma = app.get(PrismaService);
-    const merchant = await prisma.merchant.findFirstOrThrow();
+    const merchant = await demoMerchant();
     const key = randomUUID();
 
     const holder = new Client({ connectionString: process.env.DATABASE_URL });
