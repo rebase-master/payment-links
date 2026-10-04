@@ -2,7 +2,7 @@ import { ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { Args, ID, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { CurrentMerchant } from '../auth/current-merchant.decorator';
-import type { Merchant } from '../generated/prisma/client';
+import type { MerchantPrincipal } from '../auth/merchant-principal';
 import { CreatePaymentLinkInput } from './dto/create-payment-link.input';
 import { PayLinkInput } from './dto/pay-link.input';
 import { PaymentLinkType } from './dto/payment-link.type';
@@ -27,7 +27,7 @@ export class PaymentsResolver {
   @Mutation(() => PaymentLinkType)
   @UseGuards(ApiKeyGuard)
   createPaymentLink(
-    @CurrentMerchant() merchant: Merchant,
+    @CurrentMerchant() merchant: MerchantPrincipal,
     @Args('input') input: CreatePaymentLinkInput,
   ): Promise<PaymentLinkResult> {
     return this.payments.createPaymentLink(merchant, {

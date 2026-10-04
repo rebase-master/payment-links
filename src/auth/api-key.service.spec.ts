@@ -39,6 +39,7 @@ describe('ApiKeyService', () => {
     expect(result).toBe(merchant);
     expect(findUnique).toHaveBeenCalledWith({
       where: { apiKeyHash: service.hash('secret-key') },
+      select: { id: true, name: true },
     });
   });
 

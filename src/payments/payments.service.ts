@@ -7,7 +7,8 @@ import {
   UnsupportedCurrencyError,
 } from '../common/errors/domain.errors';
 import { PrismaService } from '../database/prisma.service';
-import type { Merchant, PaymentLink, Prisma } from '../generated/prisma/client';
+import type { PaymentLink, Prisma } from '../generated/prisma/client';
+import type { MerchantPrincipal } from '../auth/merchant-principal';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { OutboxService } from '../outbox/outbox.service';
 
@@ -73,7 +74,7 @@ export class PaymentsService {
   ) {}
 
   createPaymentLink(
-    merchant: Merchant,
+    merchant: MerchantPrincipal,
     input: CreatePaymentLinkInput,
   ): Promise<PaymentLinkResult> {
     const requestHash = createHash('sha256')
