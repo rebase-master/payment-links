@@ -26,7 +26,12 @@ export function maskError(
 ): GraphQLFormattedError {
   const code = formattedError.extensions?.code;
   if (typeof code === 'string' && PASS_THROUGH_CODES.has(code)) {
-    return formattedError;
+    return {
+      message: formattedError.message,
+      locations: formattedError.locations,
+      path: formattedError.path,
+      extensions: { code, ...validationErrors(formattedError) },
+    };
   }
 
   const codeLabel = typeof code === 'string' ? code : 'no-code';
@@ -37,4 +42,23 @@ export function maskError(
     message: 'Internal server error',
     extensions: { code: 'INTERNAL_SERVER_ERROR' },
   };
+}
+
+function validationErrors(formattedError: GraphQLFormattedError): {
+  validationErrors?: string[];
+} {
+  const original = formattedError.extensions?.originalError;
+  if (
+    formattedError.extensions?.code !== 'BAD_REQUEST' ||
+    typeof original !== 'object' ||
+    original === null ||
+    !('message' in original) ||
+    !Array.isArray(original.message)
+  ) {
+    return {};
+  }
+  const messages = (original.message as unknown[]).filter(
+    (m): m is string => typeof m === 'string',
+  );
+  return messages.length > 0 ? { validationErrors: messages } : {};
 }
