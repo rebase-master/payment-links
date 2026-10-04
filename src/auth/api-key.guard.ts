@@ -6,11 +6,11 @@ import {
 } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import type { Request } from 'express';
-import type { Merchant } from '../generated/prisma/client';
+import type { MerchantPrincipal } from './merchant-principal';
 import { ApiKeyService } from './api-key.service';
 
 export interface AuthenticatedRequest extends Request {
-  merchant?: Merchant;
+  merchant?: MerchantPrincipal;
 }
 
 @Injectable()

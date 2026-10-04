@@ -5,7 +5,7 @@ import {
   UnsupportedCurrencyError,
 } from '../common/errors/domain.errors';
 import type { PrismaService } from '../database/prisma.service';
-import type { Merchant } from '../generated/prisma/client';
+import type { MerchantPrincipal } from '../auth/merchant-principal';
 import type { IdempotencyService } from '../idempotency/idempotency.service';
 import { PaymentsService } from './payments.service';
 
@@ -216,7 +216,7 @@ describe('PaymentsService.createPaymentLink', () => {
   it('creates the link for the authenticated merchant, not a client-supplied id', async () => {
     const tx = makeTx();
     const { service } = makeService(tx);
-    const merchant = { id: 'merchant-1' } as unknown as Merchant;
+    const merchant: MerchantPrincipal = { id: 'merchant-1', name: 'Acme' };
 
     await service.createPaymentLink(merchant, {
       amount: 5000n,
@@ -240,7 +240,7 @@ describe('PaymentsService.createPaymentLink', () => {
     const tx = makeTx();
     tx.account.findFirst.mockResolvedValue(null);
     const { service } = makeService(tx);
-    const merchant = { id: 'merchant-1' } as unknown as Merchant;
+    const merchant: MerchantPrincipal = { id: 'merchant-1', name: 'Acme' };
 
     await expect(
       service.createPaymentLink(merchant, {

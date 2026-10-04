@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
-import type { Merchant } from '../generated/prisma/client';
+import type { MerchantPrincipal } from './merchant-principal';
 import { hashApiKey } from './hash-api-key';
 
 @Injectable()
@@ -19,9 +19,10 @@ export class ApiKeyService {
     return hashApiKey(apiKey, this.pepper);
   }
 
-  resolveMerchant(apiKey: string): Promise<Merchant | null> {
+  resolveMerchant(apiKey: string): Promise<MerchantPrincipal | null> {
     return this.prisma.merchant.findUnique({
       where: { apiKeyHash: this.hash(apiKey) },
+      select: { id: true, name: true },
     });
   }
 }
