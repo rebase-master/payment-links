@@ -22,6 +22,7 @@ describe('maskError', () => {
       ...located,
       extensions: {
         code: 'PAYMENT_LINK_NOT_PAYABLE',
+        status: 409,
         stacktrace: ['Error: boom', '    at /app/src/payments.service.ts:42'],
         originalError: { internal: true },
       },
@@ -82,6 +83,32 @@ describe('maskError', () => {
     const formatted: GraphQLFormattedError = {
       message: 'relation "payment_links" does not exist',
       extensions: { code: 'P2010' },
+    };
+
+    expect(maskError(formatted)).toEqual({
+      message: 'Internal server error',
+      extensions: { code: 'INTERNAL_SERVER_ERROR' },
+    });
+  });
+
+  it('passes through any error whose status is below 500', () => {
+    const formatted: GraphQLFormattedError = {
+      message: 'Payment link x was cancelled',
+      ...located,
+      extensions: { code: 'PAYMENT_LINK_CANCELLED', status: 410 },
+    };
+
+    expect(maskError(formatted)).toEqual({
+      message: 'Payment link x was cancelled',
+      ...located,
+      extensions: { code: 'PAYMENT_LINK_CANCELLED' },
+    });
+  });
+
+  it('masks an error whose status is 500 or above', () => {
+    const formatted: GraphQLFormattedError = {
+      message: 'No platform clearing account is configured for AED',
+      extensions: { code: 'PLATFORM_ACCOUNT_NOT_CONFIGURED', status: 500 },
     };
 
     expect(maskError(formatted)).toEqual({

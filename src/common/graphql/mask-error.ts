@@ -3,16 +3,9 @@ import type { GraphQLFormattedError } from 'graphql';
 
 const logger = new Logger('GraphQL');
 
-// Codes whose messages are safe to return verbatim: our curated domain errors
-// plus the standard client-fault codes. Everything else — Prisma, pg, or any
-// unexpected throw — is masked so internals (source paths, SQL) never reach a
-// client, and the original is logged server-side instead.
-const PASS_THROUGH_CODES = new Set([
-  'PAYMENT_LINK_NOT_FOUND',
-  'PAYMENT_LINK_NOT_PAYABLE',
-  'UNSUPPORTED_CURRENCY',
-  'IDEMPOTENCY_KEY_CONFLICT',
-  'IDEMPOTENCY_IN_PROGRESS',
+// Client-fault codes that Nest and Apollo produce themselves (validation,
+// auth, malformed queries).
+const FRAMEWORK_CLIENT_CODES = new Set([
   'BAD_REQUEST',
   'BAD_USER_INPUT',
   'UNAUTHENTICATED',
@@ -25,7 +18,13 @@ export function maskError(
   formattedError: GraphQLFormattedError,
 ): GraphQLFormattedError {
   const code = formattedError.extensions?.code;
-  if (typeof code === 'string' && PASS_THROUGH_CODES.has(code)) {
+  const status = formattedError.extensions?.status;
+  const isClientError = typeof status === 'number' && status < 500;
+
+  if (
+    typeof code === 'string' &&
+    (isClientError || FRAMEWORK_CLIENT_CODES.has(code))
+  ) {
     return {
       message: formattedError.message,
       locations: formattedError.locations,
