@@ -19,7 +19,10 @@ export class DomainExceptionFilter implements GqlExceptionFilter {
 
     if (host.getType<'graphql'>() === 'graphql') {
       return new GraphQLError(exception.message, {
-        extensions: { code: exception.code },
+        extensions: {
+          code: exception.code,
+          status: exception.httpStatus,
+        },
       });
     }
 
