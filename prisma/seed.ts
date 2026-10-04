@@ -3,8 +3,12 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client';
 import { hashApiKey } from '../src/auth/hash-api-key';
 
-if (process.env.NODE_ENV === 'production') {
-  throw new Error('Refusing to seed a production database.');
+// Only seed local databases
+const SEEDABLE_ENV = ['development', 'test'];
+if (!SEEDABLE_ENV.includes(process.env.NODE_ENV ?? '')) {
+  throw new Error(
+    `Refusing to seed: NODE_ENV is "${process.env.NODE_ENV ?? ''}"`,
+  );
 }
 
 // Local dev credential only — resolves to the seeded demo merchant. The auth
