@@ -92,5 +92,4 @@ describe('validateEnv', () => {
       /THROTTLE_LIMIT/,
     );
   });
-
 });

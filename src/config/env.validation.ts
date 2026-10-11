@@ -28,7 +28,7 @@ export class EnvironmentVariables {
   @IsInt()
   @Min(1)
   THROTTLE_TTL_MS: number = 60000;
-  
+
   @IsInt()
   @Min(1)
   @Max(65535)

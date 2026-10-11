@@ -10,6 +10,9 @@ import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { PaymentsModule } from './payments/payments.module';
 import { graphqlOptions } from './common/graphql/graphql-options';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { GqlThrottlerGuard } from './common/guards/gql-throttler.guard';
 
 @Module({
   imports: [
@@ -18,6 +21,15 @@ import { graphqlOptions } from './common/graphql/graphql-options';
       validate: validateEnv,
     }),
     LoggerModule.forRoot(loggerConfig()),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          ttl: config.getOrThrow<number>('THROTTLE_TTL_MS'),
+          limit: config.getOrThrow<number>('THROTTLE_LIMIT'),
+        },
+      ],
+    }),
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
       inject: [ConfigService],
@@ -29,5 +41,6 @@ import { graphqlOptions } from './common/graphql/graphql-options';
     MetricsModule,
     PaymentsModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: GqlThrottlerGuard }],
 })
 export class AppModule {}

@@ -67,3 +67,12 @@ export class IdempotencyInProgressError extends DomainError {
     super(`A request with idempotency key "${key}" is still in progress`);
   }
 }
+
+export class RateLimitedError extends DomainError {
+  readonly code = 'RATE_LIMITED';
+  readonly httpStatus = 429;
+
+  constructor() {
+    super('Too many requests, please try again later');
+  }
+}
