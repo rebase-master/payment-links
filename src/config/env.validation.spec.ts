@@ -70,4 +70,27 @@ describe('validateEnv', () => {
   it('allows API_KEY_PEPPER to be omitted in test', () => {
     expect(validateEnv(valid).API_KEY_PEPPER).toBeUndefined();
   });
+
+  it('defaults the rate limit to 100 requests per minute', () => {
+    const env = validateEnv(valid);
+    expect(env.THROTTLE_LIMIT).toBe(100);
+    expect(env.THROTTLE_TTL_MS).toBe(60000);
+  });
+
+  it('turns the rate limit settings into numbers', () => {
+    const env = validateEnv({
+      ...valid,
+      THROTTLE_LIMIT: '5',
+      THROTTLE_TTL_MS: '1000',
+    });
+    expect(env.THROTTLE_LIMIT).toBe(5);
+    expect(env.THROTTLE_TTL_MS).toBe(1000);
+  });
+
+  it('throws when THROTTLE_LIMIT is not a positive integer', () => {
+    expect(() => validateEnv({ ...valid, THROTTLE_LIMIT: '0' })).toThrow(
+      /THROTTLE_LIMIT/,
+    );
+  });
+
 });
